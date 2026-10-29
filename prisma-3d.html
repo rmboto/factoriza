@@ -1,0 +1,1748 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PRISMA 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Factorización prima en 3D: los factores se agrupan con los giros de los sólidos platónicos (12, 24 y 60) y forman polígonos, poliedros y formaciones platónicas, con música generativa.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@300;400;500;700;800&display=swap">
+<style>
+/* Layout: lienzo WebGL a sangre con panel de vidrio a la derecha; el HUD y los controles flotan sobre la escena. Un único tema oscuro, deliberado. */
+:root{
+  --bg:#050712;
+  --panel:#090e1ee6;
+  --chrome:#060914cc;
+  --glass:#090d19c4;
+  --ink:#eef3ff;
+  --soft:#b9c2da;
+  --muted:#8e98b4;
+  --faint:#5f6884;
+  --line:#ffffff17;
+  --line-strong:#ffffff2e;
+  --cyan:#63e6ff;
+  --violet:#9c7cff;
+  --pink:#ff6fcf;
+  --on-accent:#07101d;
+  --f-display:'Manrope','Segoe UI',system-ui,sans-serif;
+  --f-mono:'DM Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-display);overflow:hidden;-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.shell{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr)}
+.top{position:relative;z-index:4;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--line);background:var(--chrome);backdrop-filter:blur(18px)}
+.brand{display:flex;align-items:center;gap:11px;min-width:max-content}
+.mark{width:24px;height:24px;border:1px solid var(--cyan);transform:rotate(45deg);box-shadow:0 0 22px #63e6ff55;position:relative;animation:spin 16s linear infinite}
+.mark::after{content:"";position:absolute;inset:5px;border:1px solid var(--pink)}
+@keyframes spin{to{transform:rotate(405deg)}}
+.brand b{display:block;letter-spacing:.24em;font-size:13px;font-weight:800}
+.brand small{display:block;color:var(--muted);font-size:10px;letter-spacing:.1em;margin-top:2px}
+.entry{display:flex;gap:8px;align-items:center;flex:1 1 220px;max-width:400px}
+.entry input{width:100%;min-width:0;background:#ffffff0b;border:1px solid var(--line-strong);border-radius:10px;padding:9px 12px;font-family:var(--f-mono);font-size:15px}
+.entry input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px #63e6ff1c;outline:none}
+.primary{border:0;border-radius:10px;padding:10px 16px;background:linear-gradient(135deg,var(--cyan),var(--violet));color:var(--on-accent);font-weight:800;white-space:nowrap}
+.top-actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line-strong);background:#ffffff08;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.pill:hover{background:#ffffff12}
+.music{border-color:#ff6fcf88;animation:invite 2.4s ease-in-out infinite}
+.music[aria-pressed="true"]{animation:none;border-color:#63e6ff88;background:#63e6ff14}
+@keyframes invite{50%{box-shadow:0 0 22px #ff6fcf55}}
+.eq{display:inline-flex;gap:2px;align-items:flex-end;height:12px}
+.eq i{width:3px;height:4px;background:var(--pink);border-radius:2px}
+.music[aria-pressed="true"] .eq i{background:var(--cyan);animation:bar .9s ease-in-out infinite}
+.music[aria-pressed="true"] .eq i:nth-child(2){animation-delay:-.3s}
+.music[aria-pressed="true"] .eq i:nth-child(3){animation-delay:-.6s}
+@keyframes bar{0%,100%{height:3px}50%{height:12px}}
+.icon{width:36px;height:36px;border-radius:10px;border:1px solid var(--line-strong);background:#ffffff08;font-size:16px}
+.icon:hover{background:#ffffff14}
+.layout{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 330px}
+.stage{position:relative;min-width:0;min-height:0;overflow:hidden;background:var(--bg)}
+.stage canvas{position:absolute;inset:0;z-index:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+.stage::before{content:"";position:absolute;left:0;top:0;width:min(760px,80%);height:270px;z-index:1;pointer-events:none;background:radial-gradient(ellipse at 0 0,#050712e0 0%,#05071299 36%,#05071200 66%)}
+.hud{position:absolute;z-index:2;left:max(20px,calc(env(safe-area-inset-left,0px) + 16px));top:18px;right:max(20px,calc(env(safe-area-inset-right,0px) + 16px));pointer-events:none;max-width:620px}
+.eyebrow{font:500 11px var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--lc,var(--cyan));transition:color .6s}
+.hud h1{font-size:clamp(26px,3.6vw,50px);font-weight:300;letter-spacing:-.045em;line-height:1.04;margin:8px 0 8px;text-wrap:balance;text-shadow:0 2px 24px var(--bg)}
+.hud p{margin:0;color:var(--soft);font-size:14px;line-height:1.5;max-width:52ch;text-shadow:0 1px 12px var(--bg)}
+.hud .count{margin-top:10px;font:500 16px var(--f-mono);color:var(--ink);letter-spacing:-.02em}
+.hint{position:absolute;z-index:2;right:max(20px,calc(env(safe-area-inset-right,0px) + 16px));top:20px;margin:0;font:10px var(--f-mono);color:var(--faint);letter-spacing:.06em;pointer-events:none}
+.stage-tools{position:absolute;z-index:2;left:max(20px,calc(env(safe-area-inset-left,0px) + 16px));right:max(20px,calc(env(safe-area-inset-right,0px) + 16px));bottom:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.stepbar{display:flex;gap:4px;padding:5px;background:var(--glass);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(14px)}
+.stepbar button{border:0;background:transparent;border-radius:9px;width:38px;height:36px;font-size:15px}
+.stepbar button:hover{background:#ffffff12}
+.dots{display:flex;gap:7px;align-items:center;padding:11px 12px;background:var(--glass);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(14px)}
+.dots button{width:12px;height:12px;padding:0;border-radius:50%;border:1px solid var(--c);background:transparent;opacity:.6}
+.dots button.on{background:var(--c);opacity:1;box-shadow:0 0 10px var(--c)}
+.range{display:flex;align-items:center;gap:9px;margin-left:auto;padding:10px 13px;border-radius:12px;background:var(--glass);border:1px solid var(--line);font:10px var(--f-mono);color:var(--muted);letter-spacing:.08em}
+input[type=range]{width:96px;accent-color:var(--cyan)}
+.side{min-width:0;border-left:1px solid var(--line);background:var(--panel);backdrop-filter:blur(20px);padding-block:22px;padding-left:22px;padding-right:max(20px,env(safe-area-inset-right,0px));overflow:auto}
+.side h2{font-size:11px;text-transform:uppercase;letter-spacing:.18em;margin:0 0 14px;color:var(--soft);font-weight:700}
+.equation{font:500 24px var(--f-mono);letter-spacing:-.04em;line-height:1.3;overflow-wrap:anywhere}
+.equation span{color:var(--faint);transition:color .5s,text-shadow .5s}
+.equation span.used{color:var(--c);text-shadow:0 0 14px var(--c)}
+.equation i{font-style:normal;color:var(--faint);padding:0 .12em}
+.powers{font:13px var(--f-mono);color:var(--muted);margin-top:6px}
+.rule{height:1px;background:var(--line);margin:20px 0}
+.levels{display:grid;gap:7px}
+.level{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:11px;align-items:center;width:100%;padding:10px 11px;border-radius:11px;background:#ffffff05;border:1px solid transparent;opacity:.5;text-align:left;transition:opacity .3s,background .3s,border-color .3s}
+.level:hover{opacity:.85}
+.level.on{opacity:1;border-color:var(--line-strong);background:#ffffff0a}
+.level.now{border-color:var(--c)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--c)}
+.level b{font-size:12px;font-weight:700}
+.level small{display:block;color:var(--muted);font-size:11px;margin-top:3px;line-height:1.35}
+.badge{font:11px var(--f-mono);color:var(--c);border:1px solid var(--c);border-radius:6px;padding:3px 6px}
+.note{font-size:12px;line-height:1.6;color:var(--muted);margin:0 0 12px}
+.now-playing{font:11px var(--f-mono);color:var(--ink);margin:0 0 12px;letter-spacing:.04em}
+.vol{display:flex;align-items:center;justify-content:space-between;gap:10px;font:10px var(--f-mono);color:var(--muted);letter-spacing:.08em}
+.examples{display:flex;flex-wrap:wrap;gap:7px}
+.examples button{border:1px solid var(--line-strong);background:#ffffff06;border-radius:999px;padding:6px 11px;font:12px var(--f-mono)}
+.examples button:hover{border-color:var(--cyan);color:var(--cyan)}
+.sym{display:grid;gap:9px;margin:0 0 10px}
+.sym p{margin:0;font-size:12px;line-height:1.55;color:var(--soft)}
+.sym .chip{display:inline-block;font:10px var(--f-mono);letter-spacing:.04em;color:var(--c,var(--cyan));border:1px solid var(--c,var(--cyan));border-radius:6px;padding:1px 6px;margin-right:7px;vertical-align:1px}
+.note.small{font-size:11px;color:var(--muted);margin:0}
+.glfail{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--soft);font-size:14px}
+@media (max-width:860px){
+  body{overflow:auto}
+  .shell{height:auto;min-height:100%}
+  .layout{grid-template-columns:minmax(0,1fr);grid-template-rows:min(72vh,640px) auto}
+  .side{border-left:0;border-top:1px solid var(--line);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .hint,.range{display:none}
+}
+@media (max-width:540px){
+  .brand small{display:none}
+  .top-actions{margin-left:0;width:100%}
+  .hud h1{font-size:25px}
+  .hud p{font-size:13px}
+}
+@media (prefers-reduced-motion:reduce){.mark,.music,.eq i{animation:none!important}}
+</style>
+
+</head>
+<body>
+<main class="shell">
+  <header class="top">
+    <div class="brand"><span class="mark" aria-hidden="true"></span><div><b>PRISMA 3D</b><small>GEOMETRÍA DE LOS NÚMEROS</small></div></div>
+    <form class="entry" id="form">
+      <label class="sr" for="number">Número natural entre 1 y 999</label>
+      <input id="number" type="number" inputmode="numeric" min="1" max="999" value="60">
+      <button class="primary" type="submit">Factorizar</button>
+    </form>
+    <div class="top-actions">
+      <button class="pill" id="order" type="button" title="Cambiar el orden en que se aplican los factores">Factores: simetría</button>
+      <button class="pill music" id="music" type="button" aria-pressed="false"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span><span id="musicLabel">Activar música</span></button>
+      <button class="icon" id="reset" type="button" title="Reiniciar" aria-label="Reiniciar">↻</button>
+    </div>
+  </header>
+  <section class="layout">
+    <div class="stage" id="stage">
+      <canvas id="scene" tabindex="0" aria-label="Escena 3D de la factorización: arrastra para girar"></canvas>
+      <div class="hud" aria-live="polite">
+        <div class="eyebrow" id="phase">Materia prima · 60 unidades</div>
+        <h1 id="title">El número antes de la forma</h1>
+        <p id="subtitle">Cada punto es una unidad. Ninguno desaparecerá en las capas siguientes.</p>
+        <p class="count" id="count">60 puntos</p>
+      </div>
+      <p class="hint">Arrastra para girar · rueda o pellizco para acercar</p>
+      <div class="stage-tools">
+        <div class="stepbar">
+          <button id="back" type="button" aria-label="Capa anterior">←</button>
+          <button id="play" type="button" aria-label="Pausar">Ⅱ</button>
+          <button id="next" type="button" aria-label="Capa siguiente">→</button>
+        </div>
+        <div class="dots" id="dots" role="group" aria-label="Capas"></div>
+        <label class="range" for="speed">VELOCIDAD <input id="speed" type="range" min="0.4" max="2.4" step="0.2" value="1"></label>
+      </div>
+    </div>
+    <aside class="side">
+      <h2>Lectura matemática</h2>
+      <div class="equation" id="equation">60 = 5 × 3 × 2 × 2</div>
+      <div class="powers" id="powers">60 = 2² × 3 × 5</div>
+      <div class="rule"></div>
+      <h2>Capas de construcción</h2>
+      <div class="levels" id="levels"></div>
+      <div class="rule"></div>
+      <h2>Simetría</h2>
+      <div class="sym" id="sym"></div>
+      <p class="note small">Giros de los sólidos platónicos, contados como vértices × giros que dejan fijo cada vértice: tetraedro 12 = 4 × 3 · cubo 24 = 8 × 3 · octaedro 24 = 6 × 4 · dodecaedro 60 = 20 × 3 · icosaedro 60 = 12 × 5.</p>
+      <div class="rule"></div>
+      <h2>Escucha los factores</h2>
+      <p class="note">El arpegio suena en grupos de N, el último factor aplicado, y cada capa nueva llega con N campanadas; cada sólido completo brilla con un destello. Bajo, batería y melodía entran a medida que la estructura crece; la melodía final está escrita con los propios factores.</p>
+      <p class="now-playing" id="nowPlaying">Música apagada</p>
+      <label class="vol" for="volume">VOLUMEN <input id="volume" type="range" min="0" max="1" step="0.05" value="0.7"></label>
+      <div class="rule"></div>
+      <h2>Prueba con</h2>
+      <div class="examples" id="examples"></div>
+    </aside>
+  </section>
+</main>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ConvexHull } from 'three/addons/math/ConvexHull.js';
+
+const $ = (s) => document.querySelector(s);
+const V3 = THREE.Vector3;
+const PALETTE = ['#63e6ff', '#9c7cff', '#ff6fcf', '#b8ff6a', '#ffb45c', '#6fffc2', '#ff707f'];
+const colorOf = (L) => (L <= 0 ? '#eaf6ff' : PALETTE[(L - 1) % PALETTE.length]);
+const MAX_N = 999;
+const EDGE = 1;
+const AX_Y = new V3(0, 1, 0), AX_Z = new V3(0, 0, 1), UP = new V3(0, 1, 0);
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const MOTION = reduceMotion ? 0 : 1;
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const easeIO = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const hash = (i) => { const s = Math.sin(i * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/* ---------- Aritmética y nombres ---------- */
+function factorize(x) { const a = []; for (let d = 2; d * d <= x; d++) while (x % d === 0) { a.push(d); x /= d; } if (x > 1) a.push(x); return a; }
+const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+const sup = (e) => String(e).split('').map((d) => SUP[+d]).join('');
+function powersText(fs) {
+  if (!fs.length) return '1';
+  const m = new Map();
+  [...fs].sort((a, b) => a - b).forEach((p) => m.set(p, (m.get(p) || 0) + 1));
+  return [...m].map(([p, e]) => p + (e > 1 ? sup(e) : '')).join(' × ');
+}
+const POLY = { 2: ['segmento', 'segmentos'], 3: ['triángulo', 'triángulos'], 5: ['pentágono', 'pentágonos'], 7: ['heptágono', 'heptágonos'], 11: ['endecágono', 'endecágonos'], 13: ['tridecágono', 'tridecágonos'] };
+const ADJ = { 3: ['triangular', 'triangulares'], 5: ['pentagonal', 'pentagonales'], 7: ['heptagonal', 'heptagonales'], 11: ['endecagonal', 'endecagonales'], 13: ['tridecagonal', 'tridecagonales'] };
+function polyName(p, pl = false) { const e = POLY[p]; return e ? e[pl ? 1 : 0] : pl ? `polígonos de ${p} lados` : `polígono de ${p} lados`; }
+function solidName(p, q, pl = false) {
+  if (p === 2 && q === 2) return pl ? 'tetraedros' : 'tetraedro';
+  if ((p === 2 && q === 3) || (p === 3 && q === 2)) return pl ? 'octaedros' : 'octaedro';
+  if (p === 2 || q === 2) {
+    const m = q === 2 ? p : q, a = ADJ[m];
+    if (a) return pl ? `antiprismas ${a[1]}` : `antiprisma ${a[0]}`;
+    return pl ? `antiprismas de ${2 * m} vértices` : `antiprisma de ${2 * m} vértices`;
+  }
+  return pl ? `poliedros de ${p * q} vértices` : `poliedro de ${p * q} vértices`;
+}
+
+/* ---------- Simetría: los giros de los sólidos platónicos (T = 12, O = 24, I = 60) ---------- */
+const PHI = (1 + Math.sqrt(5)) / 2;
+const I3 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+function mmul(a, b) {
+  return [
+    a[0] * b[0] + a[1] * b[3] + a[2] * b[6], a[0] * b[1] + a[1] * b[4] + a[2] * b[7], a[0] * b[2] + a[1] * b[5] + a[2] * b[8],
+    a[3] * b[0] + a[4] * b[3] + a[5] * b[6], a[3] * b[1] + a[4] * b[4] + a[5] * b[7], a[3] * b[2] + a[4] * b[5] + a[5] * b[8],
+    a[6] * b[0] + a[7] * b[3] + a[8] * b[6], a[6] * b[1] + a[7] * b[4] + a[8] * b[7], a[6] * b[2] + a[7] * b[5] + a[8] * b[8],
+  ];
+}
+const mv = (m, v) => [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]];
+const rk = (x) => { const r = Math.round(x * 1e4); return r === 0 ? 0 : r; };
+const key3 = (v) => rk(v[0]) + ',' + rk(v[1]) + ',' + rk(v[2]);
+const mkey = (m) => m.map(rk).join(',');
+const d3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const l3 = (a) => Math.hypot(a[0], a[1], a[2]);
+function rotAxis(ax, ang) {
+  const l = l3(ax), x = ax[0] / l, y = ax[1] / l, z = ax[2] / l, c = Math.cos(ang), s = Math.sin(ang), C = 1 - c;
+  return [c + x * x * C, x * y * C - z * s, x * z * C + y * s, y * x * C + z * s, c + y * y * C, y * z * C - x * s, z * x * C - y * s, z * y * C + x * s, c + z * z * C];
+}
+// Cierra el grupo generado y guarda sus subgrupos cíclicos de orden primo (giros de 1/2, 1/3 y 1/5 de vuelta)
+function makeGroup(gens) {
+  const els = [I3], seen = new Set([mkey(I3)]);
+  for (let i = 0; i < els.length; i++) for (const g of gens) { const m = mmul(g, els[i]), k = mkey(m); if (!seen.has(k)) { seen.add(k); els.push(m); } }
+  const subs = { 2: [], 3: [], 5: [] }, sk = new Set(), id = mkey(I3);
+  for (const g of els) {
+    let k = 1, m = g;
+    while (mkey(m) !== id && k < 12) { m = mmul(m, g); k++; }
+    if (!subs[k]) continue;
+    const ang = Math.acos(clamp((g[0] + g[4] + g[8] - 1) / 2, -1, 1));
+    if (Math.abs(ang - (2 * Math.PI) / k) > 1e-6) continue;
+    const pow = [I3];
+    for (let c = 1; c < k; c++) pow.push(mmul(g, pow[c - 1]));
+    const kk = pow.map(mkey).sort().join('|');
+    if (sk.has(kk)) continue;
+    sk.add(kk); subs[k].push({ k, pow });
+  }
+  return { els, subs, order: els.length };
+}
+const C3M = [0, 0, 1, 1, 0, 0, 0, 1, 0], RZM = [-1, 0, 0, 0, -1, 0, 0, 0, 1], R4M = [0, -1, 0, 1, 0, 0, 0, 0, 1];
+const GROUPS = { T: makeGroup([C3M, RZM]), O: makeGroup([C3M, R4M]), I: makeGroup([C3M, RZM, rotAxis([0, 1, PHI], (2 * Math.PI) / 5)]) };
+function orbitOf(G, x) {
+  const pts = [], seen = new Set();
+  for (const g of GROUPS[G].els) { const p = mv(g, x), k = key3(p); if (!seen.has(k)) { seen.add(k); pts.push(p); } }
+  return pts;
+}
+function truncSeed(G, v, t) {
+  let best = null, bd = Infinity;
+  for (const w of orbitOf(G, v)) { const d = d3(w, v); if (d > 1e-6 && d < bd - 1e-9) { bd = d; best = w; } }
+  return v.map((x, i) => x + t * (best[i] - x));
+}
+// Órbitas: vértices de los sólidos platónicos y de tres sólidos truncados (un vértice por cada giro)
+const SITE = {
+  tetra: { G: 'T', seed: [1, 1, 1] },
+  octa: { G: 'O', seed: [1, 0, 0] },
+  cube: { G: 'O', seed: [1, 1, 1] },
+  ico: { G: 'I', seed: [0, 1, PHI] },
+  dodeca: { G: 'I', seed: [1, 1, 1] },
+  tcube: { G: 'O', seed: truncSeed('O', [1, 1, 1], 1 / (2 + Math.SQRT2)) },
+  tico: { G: 'I', seed: truncSeed('I', [0, 1, PHI], 1 / 3) },
+  tdodeca: { G: 'I', seed: truncSeed('I', [1, 1, 1], 1 / (2 + 2 * Math.cos(Math.PI / 5))) },
+};
+for (const s of Object.values(SITE)) s.size = orbitOf(s.G, s.seed).length;
+function prepSite(s) {
+  if (s.orbit) return s;
+  s.orbit = orbitOf(s.G, s.seed);
+  const index = new Map(s.orbit.map((p, i) => [key3(p), i]));
+  s.perms = {};
+  for (const k of [2, 3, 5]) s.perms[k] = GROUPS[s.G].subs[k].map((sub) => sub.pow.map((m) => Int16Array.from(s.orbit, (p) => index.get(key3(mv(m, p))))));
+  s.seedIndex = index.get(key3(s.seed));
+  return s;
+}
+function isPlanarA(P, tol = 1e-6) {
+  if (P.length < 4) return true;
+  const a = P[0];
+  let n = null;
+  for (let i = 1; i < P.length && !n; i++) for (let j = i + 1; j < P.length && !n; j++) {
+    const u = [P[i][0] - a[0], P[i][1] - a[1], P[i][2] - a[2]], v = [P[j][0] - a[0], P[j][1] - a[1], P[j][2] - a[2]];
+    const c = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]], l = l3(c);
+    if (l > 1e-6) n = c.map((x) => x / l);
+  }
+  if (!n) return true;
+  const scale = Math.max(...P.map((p) => d3(p, a))) || 1;
+  return P.every((p) => Math.abs((p[0] - a[0]) * n[0] + (p[1] - a[1]) * n[1] + (p[2] - a[2]) * n[2]) < tol * scale + 1e-9);
+}
+// 'tetra' si cuatro puntos forman un tetraedro regular, 'golden' si forman un rectángulo áureo
+function famous4(P) {
+  const d = [];
+  for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) d.push(d3(P[a], P[b]));
+  d.sort((x, y) => x - y);
+  const eq = (x, y) => Math.abs(x - y) < 1e-4 * Math.max(x, y);
+  if (eq(d[0], d[5])) return 'tetra';
+  if (isPlanarA(P) && eq(d[0], d[1]) && eq(d[2], d[3]) && eq(d[4], d[5]) && eq(d[2] / d[0], PHI)) return 'golden';
+  return null;
+}
+const WS = { l1: 1.6, degen: 0.6, sub: 1.0, planar: 0.5, famous: 2.0 };
+const decMemo = new Map();
+// Busca giros cíclicos A1..Ar (órdenes fs) tales que A_r···A_1 · semilla recorre toda la órbita sin repetir puntos.
+function decompose(siteKey, fs) {
+  const key = siteKey + ':' + fs.join(',');
+  if (decMemo.has(key)) return decMemo.get(key);
+  const site = SITE[siteKey], grp = GROUPS[site.G];
+  let M = 1; for (const f of fs) M *= f;
+  let best = null, bestScore = Infinity;
+  if (M === site.size && fs.every((f) => grp.subs[f] && grp.subs[f].length)) {
+    prepSite(site);
+    const O = site.orbit, R = l3(site.seed), mark = new Uint8Array(M), r = fs.length, sets = [], pick = [];
+    const evalScore = () => {
+      let s = 0;
+      const degen = [], famous = {};
+      for (let j = 0; j < r - 1; j++) {
+        const set = sets[j], c = [0, 0, 0];
+        for (const i of set) { c[0] += O[i][0]; c[1] += O[i][1]; c[2] += O[i][2]; }
+        c[0] /= set.length; c[1] /= set.length; c[2] /= set.length;
+        let sp = 0;
+        for (const i of set) sp += d3(O[i], c);
+        s += (j === 0 ? WS.l1 : 1) * (sp / set.length / R);
+        if (l3(c) < 0.25 * R) { s += WS.degen; degen.push(j + 1); }
+        if (j > 0) {
+          mark.fill(0);
+          for (const i of set) mark[i] = 1;
+          let inv = true;
+          for (let i = 0; i <= j && inv; i++) { const g = site.perms[fs[i]][pick[i]][1]; for (const q of set) if (!mark[g[q]]) { inv = false; break; } }
+          if (inv) s -= WS.sub;
+          const P = Array.from(set, (i) => O[i]);
+          if (set.length >= 4 && isPlanarA(P)) s -= WS.planar;
+          const f = set.length === 4 ? famous4(P) : null;
+          if (f) { s -= WS.famous; famous[j + 1] = f; }
+        }
+      }
+      return { s, degen, famous };
+    };
+    const rec = (j, set) => {
+      if (j === r) {
+        const sc = evalScore();
+        if (sc.s < bestScore - 1e-9) { bestScore = sc.s; best = { pick: pick.slice(), degen: sc.degen, famous: sc.famous }; }
+        return;
+      }
+      const f = fs[j], list = site.perms[f];
+      for (let ci = 0; ci < list.length; ci++) {
+        const pp = list[ci], next = new Int16Array(set.length * f);
+        mark.fill(0);
+        let ok = true, o = 0;
+        for (let c = 0; c < f && ok; c++) for (let e = 0; e < set.length; e++) {
+          const q = pp[c][set[e]];
+          if (mark[q]) { ok = false; break; }
+          mark[q] = 1; next[o++] = q;
+        }
+        if (!ok) continue;
+        sets[j] = next; pick[j] = ci;
+        rec(j + 1, next);
+      }
+    };
+    rec(0, Int16Array.of(site.seedIndex));
+    if (best) {
+      // El punto de índice i = c1 + f1·(c2 + f2·(…)) es a_r^{c_r}···a_1^{c_1} · semilla: los grupos de cada capa son bloques consecutivos
+      const mats = [], pts = [];
+      for (let i = 0; i < M; i++) {
+        let m = I3, rest = i;
+        const digits = fs.map((f) => { const d = rest % f; rest = (rest - d) / f; return d; });
+        for (let j = 0; j < r; j++) m = mmul(grp.subs[fs[j]][best.pick[j]].pow[digits[j]], m);
+        mats.push(m); pts.push(mv(m, site.seed));
+      }
+      best = { site: siteKey, G: site.G, fs: fs.slice(), M, pts, mats, degen: best.degen, famous: best.famous, score: bestScore };
+    }
+  }
+  decMemo.set(key, best);
+  return best;
+}
+
+/* ---------- Planificador: qué capas forman poliedros, formaciones platónicas o bolsas ---------- */
+const POINT_SITE = (M, p) => ({ 4: 'tetra', 6: 'octa', 8: 'cube', 12: 'ico', 20: 'dodeca', 24: 'tcube' }[M] || (M === 60 ? (p === 3 ? 'tdodeca' : 'tico') : null));
+const FORM_SITE = { 4: 'tetra', 6: 'octa', 8: 'cube', 12: 'ico', 20: 'dodeca' };
+const WEIGHT = { tetra: 1.5, octa: 1.5, cube: 1.5, ico: 1.5, dodeca: 1.5, tcube: 1.4, tico: 1.45, tdodeca: 1.4, gpoly: 0.5 };
+const FORM_W = { tetra: 1.0, octa: 1.0, cube: 1.05, ico: 1.1, dodeca: 1.1 };
+const famBonus = (D) => (Object.keys(D.famous).length ? 0.3 : 0);
+function plan(fs) {
+  const K = fs.length;
+  if (K === 0) return { score: 0, blocks: [] };
+  if (K === 1) return { score: 0, blocks: [{ type: 'poly', a: 1, b: 1 }] };
+  const prod = (a, b) => { let m = 1; for (let i = a; i <= b; i++) m *= fs[i - 1]; return m; };
+  const memo = new Map();
+  const rest = (j) => {
+    if (j > K) return { score: 0, blocks: [] };
+    if (memo.has(j)) return memo.get(j);
+    let best = null;
+    const consider = (score, block, next) => { const r = rest(next), t = score + r.score; if (!best || t > best.score + 1e-9) best = { score: t, blocks: [block, ...r.blocks] }; };
+    for (let b = j + 1; b <= K; b++) {
+      const site = FORM_SITE[prod(j, b)], D = site && decompose(site, fs.slice(j - 1, b));
+      if (D) consider(FORM_W[site] * (b - j + 1) + famBonus(D), { type: 'form', a: j, b, site, D }, b + 1);
+    }
+    consider(0, { type: 'bag', a: j, b: j }, j + 1);
+    memo.set(j, best);
+    return best;
+  };
+  let best = null;
+  const consider = (score, blocks, next) => { const r = rest(next), t = score + r.score; if (!best || t > best.score + 1e-9) best = { score: t, blocks: [...blocks, ...r.blocks] }; };
+  for (let b = 2; b <= K; b++) {
+    const site = POINT_SITE(prod(1, b), fs[0]), D = site && decompose(site, fs.slice(0, b));
+    if (D) consider(WEIGHT[site] * b + famBonus(D), [{ type: 'orb', a: 1, b, site, D }], b + 1);
+  }
+  consider(WEIGHT.gpoly * 2, [{ type: 'gpoly', a: 1, b: 2 }], 3);
+  for (let b = 3; b <= K; b++) {
+    const site = FORM_SITE[prod(2, b)], D = site && decompose(site, fs.slice(1, b));
+    if (D) consider(FORM_W[site] * (b - 1) + famBonus(D), [{ type: 'poly', a: 1, b: 1 }, { type: 'form', a: 2, b, site, D }], b + 1);
+  }
+  return best;
+}
+function distinctPerms(a) {
+  const out = [], c = [...a].sort((x, y) => y - x), used = new Array(c.length).fill(false), cur = [];
+  const rec = () => {
+    if (cur.length === c.length) { out.push(cur.slice()); return; }
+    for (let i = 0; i < c.length; i++) {
+      if (used[i] || (i > 0 && c[i] === c[i - 1] && !used[i - 1])) continue;
+      used[i] = true; cur.push(c[i]); rec(); cur.pop(); used[i] = false;
+    }
+  };
+  rec();
+  return out;
+}
+// Orden «simetría»: la permutación de los factores que encaja en más sólidos platónicos (en empate, de mayor a menor)
+function bestOrder(primes) {
+  let best = null;
+  for (const fs of distinctPerms(primes)) { const p = plan(fs); if (!best || p.score > best.plan.score + 1e-9) best = { fs, plan: p }; }
+  return best;
+}
+const SOLID = {
+  tetra: { one: 'tetraedro', many: 'tetraedros', G: 'T', stab: 3, grp: 'tetraedro' },
+  octa: { one: 'octaedro', many: 'octaedros', G: 'O', stab: 4, grp: 'octaedro' },
+  cube: { one: 'cubo', many: 'cubos', G: 'O', stab: 3, grp: 'cubo' },
+  ico: { one: 'icosaedro', many: 'icosaedros', G: 'I', stab: 5, grp: 'icosaedro' },
+  dodeca: { one: 'dodecaedro', many: 'dodecaedros', G: 'I', stab: 3, grp: 'dodecaedro' },
+  tcube: { one: 'cubo truncado', many: 'cubos truncados', G: 'O', stab: 1, grp: 'cubo' },
+  tico: { one: 'icosaedro truncado', many: 'icosaedros truncados', G: 'I', stab: 1, grp: 'icosaedro' },
+  tdodeca: { one: 'dodecaedro truncado', many: 'dodecaedros truncados', G: 'I', stab: 1, grp: 'dodecaedro' },
+};
+const SITE_NAME = { tetra: 'tetraedro', octa: 'octaedro', cube: 'cubo', ico: 'icosaedro', dodeca: 'dodecaedro', cubocta: 'cuboctaedro', icosid: 'icosidodecaedro' };
+const GORDER = { T: 12, O: 24, I: 60 };
+
+/* ---------- Geometría de cada capa ---------- */
+function buildPolygon(p) {
+  const a = p === 2 ? 0.55 : clamp(EDGE / (2 * Math.sin(Math.PI / p)), 0.62, 7.5);
+  const verts = [], edges = [], tris = [];
+  if (p === 2) { verts.push(new V3(-a, 0, 0), new V3(a, 0, 0)); edges.push([0, 1]); }
+  else {
+    for (let k = 0; k < p; k++) {
+      const ang = Math.PI / 2 + (k * 2 * Math.PI) / p;
+      verts.push(new V3(a * Math.cos(ang), a * Math.sin(ang), 0));
+      edges.push([k, (k + 1) % p]);
+    }
+    for (let k = 1; k < p - 1; k++) tris.push([0, k, k + 1]);
+  }
+  const edgeLen = p === 2 ? 2 * a : 2 * a * Math.sin(Math.PI / p);
+  return { verts, edges, tris, radius: a, edgeLen };
+}
+const antiprismHeight = (a, m) => a * Math.sqrt(Math.max(1e-4, 2 * (Math.cos(Math.PI / m) - Math.cos((2 * Math.PI) / m))));
+
+// q copias del polígono p se ensamblan en un poliedro convexo; los vértices conservan el orden de los puntos
+function buildPolyhedron(p, q, poly) {
+  const verts = [];
+  if (q === 2) {
+    const a = poly.radius, h = antiprismHeight(a, p);
+    for (let c = 0; c < 2; c++) for (let v = 0; v < p; v++) {
+      const ang = (v * 2 * Math.PI) / p + (c ? Math.PI / p : 0);
+      verts.push(new V3(a * Math.cos(ang), c ? -h / 2 : h / 2, a * Math.sin(ang)));
+    }
+  } else if (p === 2) {
+    const a = Math.max(EDGE / (2 * Math.sin(Math.PI / q)), 0.7), h = antiprismHeight(a, q);
+    for (let c = 0; c < q; c++) {
+      const ang = (c * 2 * Math.PI) / q, top = new V3(a * Math.cos(ang), h / 2, a * Math.sin(ang));
+      verts.push(top, top.clone().negate());
+    }
+  } else {
+    let sinMax = 0;
+    for (let c = 0; c < q; c++) sinMax = Math.max(sinMax, Math.sin((Math.PI * (c + 0.5)) / q));
+    const R = Math.max(poly.radius / sinMax, EDGE * Math.sqrt((p * q) / (4 * Math.PI)) * 1.1);
+    for (let c = 0; c < q; c++) {
+      const th = (Math.PI * (c + 0.5)) / q, r = R * Math.sin(th), y = R * Math.cos(th);
+      for (let v = 0; v < p; v++) {
+        const ang = (v * 2 * Math.PI) / p + (c % 2 ? Math.PI / p : 0);
+        verts.push(new V3(r * Math.cos(ang), y, r * Math.sin(ang)));
+      }
+    }
+  }
+  const hull = new ConvexHull().setFromPoints(verts);
+  const index = new Map(verts.map((v, i) => [v, i]));
+  const tris = [], normals = [];
+  for (const f of hull.faces) {
+    const e0 = f.edge;
+    const a = index.get(e0.head().point), b = index.get(e0.next.head().point), c = index.get(e0.next.next.head().point);
+    if (a === undefined || b === undefined || c === undefined) continue;
+    tris.push([a, b, c]); normals.push(f.normal.clone());
+  }
+  const key = (i, j) => (i < j ? i + '_' + j : j + '_' + i);
+  const adj = new Map();
+  tris.forEach((t, ti) => { for (let k = 0; k < 3; k++) { const kk = key(t[k], t[(k + 1) % 3]); if (!adj.has(kk)) adj.set(kk, []); adj.get(kk).push(ti); } });
+  const own = new Set();
+  for (let c = 0; c < q; c++) for (const [i, j] of poly.edges) own.add(key(c * p + i, c * p + j));
+  const edges = [];
+  let minEdge = Infinity;
+  for (const [kk, list] of adj) {
+    if (own.has(kk)) continue;
+    if (list.length === 2 && normals[list[0]].dot(normals[list[1]]) > 0.9995) continue; // diagonal de una cara plana
+    const [i, j] = kk.split('_').map(Number);
+    edges.push([i, j]); minEdge = Math.min(minEdge, verts[i].distanceTo(verts[j]));
+  }
+  for (const kk of own) { const [i, j] = kk.split('_').map(Number); minEdge = Math.min(minEdge, verts[i].distanceTo(verts[j])); }
+  let radius = 0;
+  verts.forEach((v) => (radius = Math.max(radius, v.length())));
+  return { verts, tris, edges, radius, minEdge };
+}
+
+// N hijos dentro de una bolsa: en corro horizontal (o disco de girasol si son muchos)
+function buildBag(N, b) {
+  const pad = 0.2 * b + 0.22, unit = b + pad * 0.5, offs = [];
+  let rho = 0;
+  if (N === 2) { rho = unit; offs.push(new V3(-rho, 0, 0), new V3(rho, 0, 0)); }
+  else if (N <= 13) {
+    rho = unit / Math.sin(Math.PI / N);
+    for (let c = 0; c < N; c++) { const ang = (c * 2 * Math.PI) / N; offs.push(new V3(rho * Math.cos(ang), 0, rho * Math.sin(ang))); }
+  } else {
+    const k = 1.2 * unit;
+    for (let c = 0; c < N; c++) { const r = k * Math.sqrt(c + 0.5), ang = c * 2.399963; offs.push(new V3(r * Math.cos(ang), 0, r * Math.sin(ang))); rho = Math.max(rho, r); }
+  }
+  return { offs, B: (rho + b) / 0.87 + 0.12 * b };
+}
+
+function buildSackGeometry() {
+  const prof = [[0, -0.97], [0.3, -0.93], [0.6, -0.8], [0.85, -0.55], [0.98, -0.2], [0.99, 0.12], [0.93, 0.42], [0.78, 0.66], [0.55, 0.86], [0.32, 0.99], [0.18, 1.07], [0.155, 1.11], [0.24, 1.165], [0.4, 1.235], [0.36, 1.29], [0.16, 1.32], [0, 1.322]];
+  const curve = new THREE.SplineCurve(prof.map(([x, y]) => new THREE.Vector2(x, y)));
+  const pts = curve.getPoints(96).map((v) => new THREE.Vector2(Math.max(0, v.x), v.y));
+  pts[0].x = 0; pts[pts.length - 1].x = 0;
+  return new THREE.LatheGeometry(pts, 72);
+}
+
+// Envolvente convexa de un grupo de puntos: segmento, polígono plano o poliedro (aristas sin diagonales de caras planas)
+const hA = new V3(), hB = new V3(), hC = new V3();
+function hullOf(pts) {
+  const n = pts.length;
+  if (n < 2) return { edges: [], tris: [] };
+  if (n === 2) return { edges: [[0, 1]], tris: [] };
+  const c = new V3();
+  pts.forEach((p) => c.add(p));
+  c.multiplyScalar(1 / n);
+  let nrm = null;
+  for (let i = 1; i < n && !nrm; i++) for (let j = i + 1; j < n && !nrm; j++) {
+    hA.subVectors(pts[i], pts[0]); hB.subVectors(pts[j], pts[0]); hC.crossVectors(hA, hB);
+    if (hC.length() > 1e-6 * (1 + hA.length() * hB.length())) nrm = hC.clone().normalize();
+  }
+  if (!nrm) return { edges: [[0, 1]], tris: [] };
+  let scale = 0;
+  pts.forEach((p) => (scale = Math.max(scale, p.distanceTo(pts[0]))));
+  if (pts.every((p) => Math.abs(hA.subVectors(p, pts[0]).dot(nrm)) < 1e-5 * (scale + 1))) {
+    const u = new V3().subVectors(pts[0], c).normalize(), w = new V3().crossVectors(nrm, u);
+    const ord = pts.map((p, i) => { hA.subVectors(p, c); return [Math.atan2(hA.dot(w), hA.dot(u)), i]; }).sort((x, y) => x[0] - y[0]).map((x) => x[1]);
+    const edges = ord.map((v, k) => [v, ord[(k + 1) % n]]), tris = [];
+    for (let k = 1; k < n - 1; k++) tris.push([ord[0], ord[k], ord[k + 1]]);
+    return { edges, tris };
+  }
+  const hull = new ConvexHull().setFromPoints(pts);
+  const index = new Map(pts.map((v, i) => [v, i]));
+  const tris = [], normals = [];
+  for (const f of hull.faces) {
+    const e0 = f.edge;
+    const a = index.get(e0.head().point), b = index.get(e0.next.head().point), cc = index.get(e0.next.next.head().point);
+    if (a === undefined || b === undefined || cc === undefined) continue;
+    tris.push([a, b, cc]); normals.push(f.normal.clone());
+  }
+  const key = (i, j) => (i < j ? i + '_' + j : j + '_' + i), adj = new Map();
+  tris.forEach((t, ti) => { for (let k = 0; k < 3; k++) { const kk = key(t[k], t[(k + 1) % 3]); if (!adj.has(kk)) adj.set(kk, []); adj.get(kk).push(ti); } });
+  const edges = [];
+  for (const [kk, list] of adj) {
+    if (list.length === 2 && normals[list[0]].dot(normals[list[1]]) > 0.9995) continue;
+    edges.push(kk.split('_').map(Number));
+  }
+  return { edges, tris };
+}
+function minAngle(C) {
+  let th = Math.PI;
+  for (let i = 0; i < C.length; i++) for (let j = i + 1; j < C.length; j++) th = Math.min(th, C[i].angleTo(C[j]));
+  return th;
+}
+function isPlanarV(P) { return isPlanarA(P.map((p) => [p.x, p.y, p.z])); }
+// ¿Los centros de los polígonos son los vértices de un sólido reconocible? Devuelve su nombre y sus aristas.
+function classifySites(C) {
+  const n = C.length, r0 = C[0].length();
+  if (n < 4 || r0 < 1e-6 || C.some((c) => Math.abs(c.length() - r0) > 1e-4 * r0) || isPlanarV(C)) return null;
+  let mn = Infinity;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) mn = Math.min(mn, C[i].distanceTo(C[j]));
+  const edges = [], deg = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (C[i].distanceTo(C[j]) < mn * 1.001) { edges.push([i, j]); deg[i]++; deg[j]++; }
+  if (deg.some((x) => x !== deg[0])) return null;
+  const key = { '4:3': 'tetra', '6:4': 'octa', '8:3': 'cube', '12:5': 'ico', '12:4': 'cubocta', '20:3': 'dodeca', '30:4': 'icosid' }[n + ':' + deg[0]];
+  return key ? { key, edges } : null;
+}
+function groupCentroids(P, per) {
+  const C = [];
+  for (let g = 0; g < P.length / per; g++) { const c = new V3(); for (let j = 0; j < per; j++) c.add(P[g * per + j]); C.push(c.multiplyScalar(1 / per)); }
+  return C;
+}
+// Explosión de cada capa: los grupos se separan a lo largo de la dirección de su centro
+function explode(blk, P, R, lo, hi, per, extra) {
+  blk.beta = []; blk.dirs = []; blk.prev = []; blk.C0 = []; blk.gR = [];
+  for (let L = lo; L <= hi; L++) {
+    const k = per(L), C = groupCentroids(P, k);
+    blk.C0[L] = C[0];
+    let gr = 0;
+    for (let j = 0; j < k; j++) gr = Math.max(gr, P[j].distanceTo(C[0]));
+    blk.gR[L] = gr + extra;
+    if (L === hi) continue;
+    const cl = C[0].length();
+    if (cl < 0.25 * R) { blk.prev[L] = false; blk.beta[L] = 0; continue; }
+    const th = minAngle(C), need = (blk.gR[L] + 0.35) / Math.sin(th / 2) - cl;
+    blk.beta[L] = Math.max(need, 0.4 * R); blk.prev[L] = true;
+    blk.dirs[L] = C.map((c) => c.clone().normalize());
+  }
+}
+// Bloque «órbita»: los puntos de las capas 1..b forman un poliedro cuyos vértices recorren un grupo de giros
+function buildOrb(blk) {
+  const D = blk.D, M = D.M;
+  let mn = Infinity;
+  for (let i = 0; i < M; i++) for (let j = i + 1; j < M; j++) mn = Math.min(mn, d3(D.pts[i], D.pts[j]));
+  const k = EDGE / mn;
+  blk.P = D.pts.map((p) => new V3(p[0] * k, p[1] * k, p[2] * k));
+  blk.R = blk.P[0].length();
+  explode(blk, blk.P, blk.R, 1, blk.b, (L) => S.size[L], 0.12);
+  blk.hull = [];
+  const own = new Set(), key = (i, j) => (i < j ? i * 4096 + j : j * 4096 + i);
+  for (let L = 1; L <= blk.b; L++) {
+    const sz = S.size[L], H = hullOf(blk.P.slice(0, sz));
+    if (L === 1) { for (let g = 0; g < M / sz; g++) for (const [i, j] of H.edges) own.add(key(g * sz + i, g * sz + j)); blk.hull[1] = H; }
+    else blk.hull[L] = { edges: H.edges.filter(([i, j]) => !own.has(key(i, j))), tris: H.tris };
+  }
+  blk.edge1 = blk.P[0].distanceTo(blk.P[1]);
+  const sk = classifySites(groupCentroids(blk.P, S.size[1]));
+  blk.siteSolid = sk ? sk.key : null;
+  blk.skel = sk ? { edges: sk.edges, base: 1 } : null;
+}
+// Bloque «formación»: los objetos de la capa a−1 se colocan en los vértices de un sólido platónico
+function buildForm(blk) {
+  const D = blk.D, M = D.M, a = blk.a, r0 = S.Robj[a - 1];
+  const U = D.pts.map((p) => new V3(p[0], p[1], p[2]).normalize());
+  const gap = Math.max(0.6, 0.75 * r0);
+  blk.Rf = (r0 + gap / 2) / Math.sin(minAngle(U) / 2);
+  blk.sites = U.map((u) => u.clone().multiplyScalar(blk.Rf));
+  const baseKind = S.kind[a - 1], q0 = new THREE.Quaternion();
+  if (baseKind === 'poly') q0.setFromUnitVectors(AX_Z, U[0]);
+  const m4 = new THREE.Matrix4();
+  blk.rot = D.mats.map((m) => (baseKind === 'bag' ? new THREE.Quaternion() : new THREE.Quaternion().setFromRotationMatrix(m4.set(m[0], m[1], m[2], 0, m[3], m[4], m[5], 0, m[6], m[7], m[8], 0, 0, 0, 0, 1)).multiply(q0)));
+  blk.R = blk.Rf + r0;
+  explode(blk, blk.sites, blk.Rf, a - 1, blk.b, (L) => S.size[L] / S.size[a - 1], r0);
+  let mn = Infinity;
+  for (let i = 0; i < M; i++) for (let j = i + 1; j < M; j++) mn = Math.min(mn, blk.sites[i].distanceTo(blk.sites[j]));
+  const edges = [];
+  for (let i = 0; i < M; i++) for (let j = i + 1; j < M; j++) if (blk.sites[i].distanceTo(blk.sites[j]) < mn * 1.001) edges.push([i, j]);
+  blk.skel = { edges, base: a - 1 };
+}
+
+/* ---------- Shaders ---------- */
+const GLASS_V = `
+varying vec3 vN; varying vec3 vW;
+void main(){
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal);
+  gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+const GLASS_F = `
+uniform vec3 uColor; uniform float uAlpha; uniform float uTime;
+varying vec3 vN; varying vec3 vW;
+void main(){
+  vec3 V = normalize(cameraPosition - vW); vec3 N = normalize(vN);
+  float ndv = abs(dot(N, V)); float fr = pow(1.0 - ndv, 2.2);
+  vec3 film = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + ndv * 0.9 + dot(N, vec3(0.4, 0.6, 0.2)) * 0.5 + uTime * 0.03));
+  vec3 col = mix(uColor, film, 0.28) * (0.32 + 1.0 * fr);
+  gl_FragColor = vec4(col, uAlpha * (0.14 + 0.62 * fr));
+}`;
+const BAG_V = `
+uniform float uTime; uniform float uWob;
+varying vec3 vN; varying vec3 vW; varying float vY;
+void main(){
+  vec3 p = position;
+  float a = atan(p.z, p.x);
+  float w = sin(p.y * 4.0 + uTime * 1.2 + a * 2.0) * 0.6 + sin(a * 5.0 - uTime * 0.8 + p.y * 3.0) * 0.4;
+  p += normal * w * uWob * (1.0 - smoothstep(0.6, 1.05, p.y));
+  float frill = smoothstep(1.14, 1.24, p.y);
+  p.xz *= 1.0 + frill * (0.22 * sin(a * 9.0 + uTime * 0.6 * uWob * 50.0) + 0.06);
+  vec4 local = vec4(p, 1.0);
+  vec3 n = normal;
+  #ifdef USE_INSTANCING
+    local = instanceMatrix * local;
+    n = mat3(instanceMatrix) * n;
+  #endif
+  vec4 wp = modelMatrix * local;
+  vW = wp.xyz; vY = position.y;
+  vN = normalize(mat3(modelMatrix) * n);
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+const BAG_F = `
+uniform vec3 uColor; uniform float uAlpha; uniform float uTime;
+varying vec3 vN; varying vec3 vW; varying float vY;
+void main(){
+  vec3 V = normalize(cameraPosition - vW); vec3 N = normalize(vN);
+  float ndv = abs(dot(N, V)); float fr = pow(1.0 - ndv, 2.4);
+  vec3 film = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + ndv * 1.4 + vY * 0.22 + uTime * 0.035));
+  vec3 col = mix(uColor, film, 0.3);
+  float top = smoothstep(0.95, 1.15, vY);
+  gl_FragColor = vec4(col * (0.55 + 1.1 * fr), uAlpha * (0.025 + 0.42 * fr + 0.16 * top));
+}`;
+const FLOOR_V = `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
+const FLOOR_F = `
+uniform float uStep; uniform float uTime; uniform float uFade; uniform float uAlpha; uniform vec3 uC1; uniform vec3 uC2;
+varying vec3 vW;
+void main(){
+  vec2 g = vW.xz / uStep; g.y -= uTime * 0.35;
+  vec2 gd = abs(fract(g - 0.5) - 0.5) / fwidth(g);
+  float line = 1.0 - min(min(gd.x, gd.y), 1.0);
+  vec2 fw = fwidth(g);
+  line *= 1.0 - smoothstep(0.2, 0.6, max(fw.x, fw.y));
+  float d = length(vW.xz);
+  vec3 col = mix(uC1, uC2, clamp(d / (uFade * 1.3), 0.0, 1.0));
+  gl_FragColor = vec4(col, line * exp(-d / uFade) * uAlpha);
+}`;
+const SKY_F = `
+varying vec3 vD;
+void main(){
+  vec3 d = normalize(vD);
+  vec3 col = mix(vec3(0.010, 0.013, 0.040), vec3(0.028, 0.032, 0.085), smoothstep(-0.5, 0.7, d.y));
+  col += vec3(0.10, 0.05, 0.22) * pow(max(dot(d, normalize(vec3(-0.6, 0.35, -0.7))), 0.0), 5.0);
+  col += vec3(0.02, 0.10, 0.13) * pow(max(dot(d, normalize(vec3(0.75, -0.05, -0.6))), 0.0), 4.0);
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+/* ---------- Música generativa ---------- */
+const BPM = 100, STEP = 60 / BPM / 4, BAR = STEP * 16;
+const CHORDS = [
+  { root: 33, pad: [57, 60, 64, 67, 71] }, // Lam9
+  { root: 29, pad: [53, 57, 60, 64, 67] }, // Famaj7
+  { root: 36, pad: [52, 55, 59, 60, 62] }, // Domaj7
+  { root: 31, pad: [55, 59, 62, 64, 67] }, // Sol6
+];
+CHORDS.forEach((c) => {
+  const pcs = new Set(c.pad.map((m) => m % 12));
+  const pool = [];
+  for (let m = 64; m <= 100; m++) if (pcs.has(m % 12)) pool.push(m);
+  c.arp = pool.slice(Math.max(0, pool.findIndex((m) => m >= 69)));
+});
+const PENTA = [69, 72, 74, 76, 79, 81, 84, 86, 88];
+const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+class Music {
+  constructor() { this.ctx = null; this.on = false; this.vol = 0.7; this.level = 0; this.group = 0; this.final = false; this.factors = []; this.kicks = []; this.i = 0; this.k = 0; this.timer = null; this.next = 0; }
+  init(ctx) {
+    if (this.ctx) return true;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!ctx && !AC) return false;
+    const c = (this.ctx = ctx || new AC());
+    this.master = c.createGain(); this.master.gain.value = ctx ? 0.8 : 0;
+    const comp = c.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.knee.value = 10; comp.ratio.value = 3.5; comp.attack.value = 0.005; comp.release.value = 0.25;
+    this.master.connect(comp); comp.connect(c.destination);
+    this.noise = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+    const nd = this.noise.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    this.rev = c.createConvolver(); this.rev.buffer = this.impulse(3.2, 2.8);
+    const revOut = c.createGain(); revOut.gain.value = 0.5; this.rev.connect(revOut); revOut.connect(this.master);
+    this.dly = c.createDelay(1.5); this.dly.delayTime.value = STEP * 3;
+    const fb = c.createGain(); fb.gain.value = 0.38;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600;
+    this.dly.connect(lp); lp.connect(fb); fb.connect(this.dly);
+    const dOut = c.createGain(); dOut.gain.value = 0.3; lp.connect(dOut); dOut.connect(this.master);
+    this.duck = c.createGain(); this.duck.connect(this.master);
+    const bus = (g, toDuck, rev, dly) => {
+      const b = c.createGain(); b.gain.value = g; b.connect(toDuck ? this.duck : this.master);
+      if (rev) { const s = c.createGain(); s.gain.value = rev; b.connect(s); s.connect(this.rev); }
+      if (dly) { const s = c.createGain(); s.gain.value = dly; b.connect(s); s.connect(this.dly); }
+      return b;
+    };
+    this.padBus = bus(0.9, true, 0.55, 0);
+    this.arpBus = bus(0, true, 0.25, 0.45);
+    this.bassBus = bus(0, true, 0.05, 0);
+    this.drumBus = bus(0.9, false, 0.06, 0);
+    this.fxBus = bus(0.8, false, 0.65, 0.2);
+    this.leadBus = bus(0, false, 0.45, 0.5);
+    this.applyLayers(true);
+    return true;
+  }
+  impulse(dur, decay) {
+    const c = this.ctx, len = Math.floor(c.sampleRate * dur), b = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); }
+    return b;
+  }
+  ready() { return this.on && this.ctx && this.ctx.state === 'running'; }
+  start() {
+    if (!this.init()) return false;
+    const c = this.ctx, t = c.currentTime;
+    c.resume();
+    this.on = true;
+    this.master.gain.cancelScheduledValues(t); this.master.gain.setValueAtTime(this.master.gain.value, t); this.master.gain.linearRampToValueAtTime(this.vol, t + 0.6);
+    this.applyLayers(true);
+    if (!this.timer) { this.next = c.currentTime + 0.08; this.timer = setInterval(() => this.pump(), 25); }
+    return true;
+  }
+  stop() {
+    if (!this.ctx) return;
+    this.on = false;
+    const c = this.ctx, t = c.currentTime;
+    this.master.gain.cancelScheduledValues(t); this.master.gain.setValueAtTime(this.master.gain.value, t); this.master.gain.linearRampToValueAtTime(0, t + 0.3);
+    setTimeout(() => { if (!this.on) { clearInterval(this.timer); this.timer = null; c.suspend(); } }, 450);
+  }
+  setVolume(v) { this.vol = v; if (this.on && this.ctx) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.08); }
+  setLevel(L, group, final) { if (group !== this.group) this.k = 0; this.level = L; this.group = group; this.final = final; this.applyLayers(false); }
+  applyLayers(instant) {
+    if (!this.ctx || !this.arpBus) return;
+    const t = this.ctx.currentTime, L = this.level, tau = instant ? 0.05 : 0.8;
+    this.arpBus.gain.setTargetAtTime(L >= 1 ? 0.85 : 0, t, tau);
+    this.bassBus.gain.setTargetAtTime(L >= 2 ? 0.9 : 0, t, tau);
+    this.leadBus.gain.setTargetAtTime(L >= 4 || (this.final && L >= 2) ? 0.8 : 0, t, tau * 1.5);
+  }
+  pump() {
+    const c = this.ctx;
+    if (this.next < c.currentTime - 0.25) this.next = c.currentTime + 0.05;
+    while (this.next < c.currentTime + 0.14) { this.step(this.i, this.next); this.next += STEP; this.i++; }
+  }
+  step(i, time) {
+    const s = i % 16, bar = Math.floor(i / 16), ch = CHORDS[bar % 4], L = this.level;
+    if (s === 0) this.pad(time, ch.pad, BAR, Math.min(2600, 700 + L * 320));
+    if (L >= 1 && this.group > 0) {
+      const p = this.group, pos = this.k++ % p, pool = ch.arp;
+      const note = pool[pos % pool.length] + 12 * Math.floor(pos / pool.length);
+      this.pluck(time, note, pos === 0 ? 1 : 0.5, p > 1 ? (pos / (p - 1)) * 1.1 - 0.55 : 0);
+    }
+    if (L >= 2) {
+      if (s % 4 === 0) this.kick(time);
+      if (s % 2 === 0) this.bass(time, ch.root + (s === 6 || s === 14 ? 12 : 0));
+    }
+    if (L >= 3) {
+      if (s === 4 || s === 12) this.snare(time);
+      if (s % 4 === 2) this.hat(time, 0.12, 0.07);
+      else if (L >= 4 && s % 2 === 1) this.hat(time, 0.04, 0.025);
+    }
+    if ((L >= 4 || (this.final && L >= 2)) && (s === 0 || s === 6 || s === 10)) {
+      const slot = s === 0 ? 0 : s === 6 ? 1 : 2, fs = this.factors.length ? this.factors : [2, 3, 5];
+      const prime = fs[(bar * 3 + slot) % fs.length];
+      this.lead(time, PENTA[(prime + slot + bar) % PENTA.length], slot === 0 ? STEP * 6 : STEP * 4);
+    }
+  }
+  noiseSrc(time, dur) { const s = this.ctx.createBufferSource(); s.buffer = this.noise; s.loop = true; s.start(time, Math.random() * 1.5); s.stop(time + dur + 0.05); return s; }
+  env(g, time, peak, attack, release) { g.gain.setValueAtTime(0.0001, time); g.gain.exponentialRampToValueAtTime(peak, time + attack); g.gain.exponentialRampToValueAtTime(0.0001, time + release); }
+  pad(time, notes, dur, cutoff) {
+    const c = this.ctx, f = c.createBiquadFilter();
+    f.type = 'lowpass'; f.Q.value = 0.7;
+    f.frequency.setValueAtTime(cutoff * 0.6, time); f.frequency.linearRampToValueAtTime(cutoff, time + dur * 0.5); f.frequency.linearRampToValueAtTime(cutoff * 0.7, time + dur + 1.5);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, time); g.gain.linearRampToValueAtTime(0.05, time + 0.9); g.gain.setValueAtTime(0.05, time + dur); g.gain.linearRampToValueAtTime(0.0001, time + dur + 1.6);
+    f.connect(g); g.connect(this.padBus);
+    for (const m of notes) for (const d of [-8, 8]) {
+      const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mtof(m); o.detune.value = d;
+      const p = c.createStereoPanner(); p.pan.value = d > 0 ? 0.45 : -0.45;
+      o.connect(p); p.connect(f); o.start(time); o.stop(time + dur + 1.7);
+    }
+  }
+  pluck(time, m, vel, pan) {
+    const c = this.ctx, f = mtof(m);
+    const o1 = c.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = f;
+    const o2 = c.createOscillator(); o2.type = 'square'; o2.frequency.value = f * 0.5;
+    const o2g = c.createGain(); o2g.gain.value = 0.35;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 4;
+    lp.frequency.setValueAtTime(900 + 3600 * vel, time); lp.frequency.exponentialRampToValueAtTime(380, time + 0.24);
+    const g = c.createGain(); this.env(g, time, 0.03 + 0.14 * vel, 0.004, 0.32);
+    const p = c.createStereoPanner(); p.pan.value = pan;
+    o1.connect(lp); o2.connect(o2g); o2g.connect(lp); lp.connect(g); g.connect(p); p.connect(this.arpBus);
+    o1.start(time); o2.start(time); o1.stop(time + 0.36); o2.stop(time + 0.36);
+  }
+  bass(time, m) {
+    const c = this.ctx, f = mtof(m);
+    const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+    const sub = c.createOscillator(); sub.type = 'sine'; sub.frequency.value = f;
+    const sg = c.createGain(); sg.gain.value = 0.7;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 3;
+    lp.frequency.setValueAtTime(1300, time); lp.frequency.exponentialRampToValueAtTime(240, time + 0.16);
+    const g = c.createGain(); this.env(g, time, 0.26, 0.006, 0.27);
+    o.connect(lp); lp.connect(g); sub.connect(sg); sg.connect(g); g.connect(this.bassBus);
+    o.start(time); sub.start(time); o.stop(time + 0.3); sub.stop(time + 0.3);
+  }
+  kick(time) {
+    const c = this.ctx, o = c.createOscillator();
+    o.type = 'sine'; o.frequency.setValueAtTime(150, time); o.frequency.exponentialRampToValueAtTime(44, time + 0.12);
+    const g = c.createGain(); this.env(g, time, 0.95, 0.004, 0.42);
+    o.connect(g); g.connect(this.drumBus); o.start(time); o.stop(time + 0.45);
+    const n = this.noiseSrc(time, 0.02), hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500;
+    const ng = c.createGain(); this.env(ng, time, 0.18, 0.001, 0.02);
+    n.connect(hp); hp.connect(ng); ng.connect(this.drumBus);
+    const d = this.duck.gain; d.cancelScheduledValues(time); d.setValueAtTime(0.4, time); d.linearRampToValueAtTime(1, time + 0.26);
+    this.kicks.push(time); if (this.kicks.length > 12) this.kicks.shift();
+  }
+  snare(time) {
+    const c = this.ctx, n = this.noiseSrc(time, 0.22), bp = c.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = 0.7;
+    const g = c.createGain(); this.env(g, time, 0.42, 0.003, 0.2);
+    n.connect(bp); bp.connect(g); g.connect(this.drumBus);
+    const s = c.createGain(); s.gain.value = 0.35; g.connect(s); s.connect(this.rev);
+    const o = c.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(200, time); o.frequency.exponentialRampToValueAtTime(140, time + 0.1);
+    const og = c.createGain(); this.env(og, time, 0.3, 0.003, 0.12);
+    o.connect(og); og.connect(this.drumBus); o.start(time); o.stop(time + 0.14);
+  }
+  hat(time, vol, dec) {
+    const c = this.ctx, n = this.noiseSrc(time, dec + 0.02), hp = c.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 7800;
+    const g = c.createGain(); this.env(g, time, vol, 0.002, dec);
+    const p = c.createStereoPanner(); p.pan.value = 0.25;
+    n.connect(hp); hp.connect(g); g.connect(p); p.connect(this.drumBus);
+  }
+  lead(time, m, dur) {
+    const c = this.ctx, f = mtof(m);
+    const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+    const o2 = c.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2;
+    const o2g = c.createGain(); o2g.gain.value = 0.25;
+    const lfo = c.createOscillator(); lfo.frequency.value = 5.2;
+    const lg = c.createGain(); lg.gain.value = 7; lfo.connect(lg); lg.connect(o.detune); lg.connect(o2.detune);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, time); g.gain.exponentialRampToValueAtTime(0.11, time + 0.05); g.gain.setValueAtTime(0.11, time + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, time + dur + 0.5);
+    o.connect(g); o2.connect(o2g); o2g.connect(g); g.connect(this.leadBus);
+    for (const x of [o, o2, lfo]) { x.start(time); x.stop(time + dur + 0.55); }
+  }
+  bell(time, m, vol) {
+    const c = this.ctx, f = mtof(m), g = c.createGain();
+    this.env(g, time, vol, 0.004, 1.6); g.connect(this.fxBus);
+    for (const [r, a] of [[1, 1], [2.76, 0.32], [5.4, 0.12]]) {
+      const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = f * r;
+      const og = c.createGain(); og.gain.value = a; o.connect(og); og.connect(g); o.start(time); o.stop(time + 1.65);
+    }
+  }
+  riser(dur) {
+    if (!this.ready()) return;
+    const c = this.ctx, t = c.currentTime + 0.02, n = this.noiseSrc(t, dur), bp = c.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 3.5; bp.frequency.setValueAtTime(300, t); bp.frequency.exponentialRampToValueAtTime(6500, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + dur * 0.92); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.08);
+    n.connect(bp); bp.connect(g); g.connect(this.fxBus);
+  }
+  fall() {
+    if (!this.ready()) return;
+    const c = this.ctx, t = c.currentTime + 0.02, o = c.createOscillator();
+    o.type = 'sine'; o.frequency.setValueAtTime(880, t); o.frequency.exponentialRampToValueAtTime(220, t + 0.6);
+    const g = c.createGain(); this.env(g, t, 0.06, 0.03, 0.7);
+    o.connect(g); g.connect(this.fxBus); o.start(t); o.stop(t + 0.75);
+  }
+  impact(p, final) {
+    if (!this.ready()) return;
+    const c = this.ctx, t = c.currentTime + 0.02, o = c.createOscillator();
+    o.type = 'sine'; o.frequency.setValueAtTime(72, t); o.frequency.exponentialRampToValueAtTime(36, t + 0.7);
+    const g = c.createGain(); this.env(g, t, 0.55, 0.01, 1.4);
+    o.connect(g); g.connect(this.drumBus); o.start(t); o.stop(t + 1.45);
+    const hits = Math.min(p, 9), gap = p > 9 ? 0.05 : 0.085;
+    for (let k = 0; k < hits; k++) this.bell(t + 0.04 + k * gap, PENTA[k], 0.12);
+    if (p > 9) this.bell(t + 0.14 + hits * gap, PENTA[0] + 12, 0.14);
+    if (final) this.crash(t);
+  }
+  shimmer() {
+    if (!this.ready()) return;
+    const t = this.ctx.currentTime + 0.32, ch = CHORDS[Math.floor(this.i / 16) % 4];
+    ch.arp.slice(0, 6).forEach((m, k) => this.bell(t + k * 0.07, m + 12, 0.06));
+  }
+  crash(t) {
+    const c = this.ctx, n = this.noiseSrc(t, 2.6), hp = c.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 4200;
+    const g = c.createGain(); this.env(g, t, 0.22, 0.01, 2.5);
+    n.connect(hp); hp.connect(g); g.connect(this.fxBus);
+  }
+  beat() {
+    if (!this.on || !this.ctx) return 0;
+    const now = this.ctx.currentTime - (this.ctx.outputLatency || 0.03);
+    let last = -1;
+    for (const k of this.kicks) if (k <= now && k > last) last = k;
+    return last < 0 ? 0 : Math.exp(-(now - last) * 7);
+  }
+}
+const music = new Music();
+
+/* ---------- Escena ---------- */
+const stage = $('#stage'), canvas = $('#scene');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+} catch (err) {
+  stage.insertAdjacentHTML('beforeend', '<div class="glfail">Este navegador no puede mostrar gráficos 3D (WebGL). Prueba con otro navegador o activa la aceleración por hardware.</div>');
+  throw err;
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#050712');
+const camera = new THREE.PerspectiveCamera(42, 1, 0.05, 20000);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.dampingFactor = 0.07; controls.enablePan = false;
+controls.autoRotate = !reduceMotion; controls.autoRotateSpeed = 0.45; controls.rotateSpeed = 0.6;
+controls.minDistance = 0.5; controls.maxDistance = 40000;
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.75, 0, 0.62);
+// Keep the tight neon glow, drop most of the wide mips that read as fog.
+bloom.compositeMaterial.uniforms.bloomFactors.value = [1.0, 0.7, 0.24, 0.08, 0.03];
+bloom.bloomTintColors[3].set(0.8, 0.7, 1.0);
+bloom.bloomTintColors[4].set(0.65, 0.55, 1.0);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, vertexShader: 'varying vec3 vD; void main(){ vD = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }', fragmentShader: SKY_F }));
+sky.frustumCulled = false; sky.renderOrder = -10; scene.add(sky);
+const starGeo = new THREE.BufferGeometry();
+{
+  const a = new Float32Array(2400 * 3);
+  for (let i = 0; i < 2400; i++) { const u = hash(i) * 2 - 1, th = hash(i + 7777) * Math.PI * 2, r = Math.sqrt(1 - u * u); a[i * 3] = r * Math.cos(th); a[i * 3 + 1] = u; a[i * 3 + 2] = r * Math.sin(th); }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(a, 3));
+}
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: new THREE.Color('#cfe0ff'), size: 1.5, sizeAttenuation: false, transparent: true, opacity: 0.75, depthWrite: false }));
+stars.frustumCulled = false; stars.renderOrder = -9; scene.add(stars);
+const floorMat = new THREE.ShaderMaterial({ vertexShader: FLOOR_V, fragmentShader: FLOOR_F, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { uStep: { value: 1 }, uTime: { value: 0 }, uFade: { value: 20 }, uAlpha: { value: 0.32 }, uC1: { value: new THREE.Color('#ff6fcf') }, uC2: { value: new THREE.Color('#5a4bff') } } });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), floorMat);
+floor.rotation.x = -Math.PI / 2; floor.frustumCulled = false; scene.add(floor);
+
+const pointGeo = new THREE.IcosahedronGeometry(1, 2);
+const pointMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+const points = new THREE.InstancedMesh(pointGeo, pointMat, MAX_N);
+points.instanceMatrix.setUsage(THREE.DynamicDrawUsage); points.frustumCulled = false; scene.add(points);
+const tubeGeo = new THREE.CylinderGeometry(1, 1, 1, 7, 1, true);
+const sackGeo = buildSackGeometry();
+const tieGeo = new THREE.TorusGeometry(0.17, 0.032, 10, 48); tieGeo.rotateX(Math.PI / 2); tieGeo.translate(0, 1.105, 0);
+const SHARED = new Set([pointGeo, tubeGeo, sackGeo, tieGeo]);
+const dyn = new THREE.Group(); scene.add(dyn);
+
+function hdr(hex, k) { return new THREE.Color(hex).multiplyScalar(k); }
+function makeTubes(count, hex) {
+  const mat = new THREE.MeshBasicMaterial({ color: hdr(hex, 1.25), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
+  const m = new THREE.InstancedMesh(tubeGeo, mat, Math.max(1, count));
+  m.count = count; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); dyn.add(m);
+  return m;
+}
+function makeGlass(triCount, hex) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(Math.max(1, triCount) * 9), 3).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(Math.max(1, triCount) * 9), 3).setUsage(THREE.DynamicDrawUsage));
+  g.setDrawRange(0, triCount * 3);
+  const mat = new THREE.ShaderMaterial({ vertexShader: GLASS_V, fragmentShader: GLASS_F, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, uniforms: { uColor: { value: new THREE.Color(hex) }, uAlpha: { value: 0 }, uTime: { value: 0 } } });
+  const m = new THREE.Mesh(g, mat); m.frustumCulled = false; dyn.add(m);
+  return m;
+}
+function makeBagLevel(count, hex) {
+  const mat = new THREE.ShaderMaterial({ vertexShader: BAG_V, fragmentShader: BAG_F, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, uniforms: { uColor: { value: new THREE.Color(hex) }, uAlpha: { value: 0 }, uTime: { value: 0 }, uWob: { value: 0.02 * MOTION } } });
+  mat.side = THREE.FrontSide;
+  const sack = new THREE.InstancedMesh(sackGeo, mat, count);
+  const tie = new THREE.InstancedMesh(tieGeo, new THREE.MeshBasicMaterial({ color: hdr(hex, 1.7), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }), count);
+  for (const m of [sack, tie]) { m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.visible = false; dyn.add(m); }
+  return { sack, tie };
+}
+
+const BLACK = new THREE.Color(0, 0, 0);
+function makeSkel(count) {
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
+  const m = new THREE.InstancedMesh(tubeGeo, mat, Math.max(1, count));
+  for (let i = 0; i < Math.max(1, count); i++) m.setColorAt(i, BLACK);
+  m.count = count; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.instanceColor.setUsage(THREE.DynamicDrawUsage);
+  dyn.add(m);
+  return m;
+}
+
+/* ---------- Estado ---------- */
+const S = { n: 60, order: 'sym', F: [null], K: 0, size: [1], count: [1], blocks: [], kind: [], blkOf: [], unit: [0], prev: [false], unitR: [0.1], Robj: [0.1], pr: [0.1], poly1: null, poly2: null, bags: [], grids: [], dist: [], floorY: [], gstep: [], level: 0, from: 0, to: 0, prog: 1, target: 0, hold: 0, playing: true, speed: 1, flash: 0 };
+let hullLv = [], skels = [], bagMeshes = [];
+let viewW = 1, viewH = 1;
+const TP = Array.from({ length: 14 }, () => new V3()), TQ = Array.from({ length: 14 }, () => new THREE.Quaternion());
+const posA = new Float32Array(MAX_N * 3), posB = new Float32Array(MAX_N * 3), cur = new Float32Array(MAX_N * 3), cen = new Float32Array(MAX_N * 3);
+let bagA = [], bagB = [];
+
+function buildMeshes() {
+  for (const m of dyn.children.slice()) {
+    dyn.remove(m);
+    if (!SHARED.has(m.geometry)) m.geometry.dispose();
+    m.material.dispose();
+    if (m.isInstancedMesh) m.dispose();
+  }
+  hullLv = []; skels = []; bagMeshes = [];
+  for (let L = 1; L <= S.K; L++) {
+    const k = S.kind[L], blk = S.blkOf[L];
+    const local = k === 'poly' ? S.poly1 : k === 'gpoly' ? S.poly2 : k === 'orb' ? blk.hull[L] : null;
+    if (!local) continue;
+    const sz = S.size[L], e = [], tr = [];
+    for (let g = 0, o = 0; g < S.count[L]; g++, o += sz) {
+      for (const [a, b] of local.edges) e.push(o + a, o + b);
+      for (const [a, b, c] of local.tris) tr.push(o + a, o + b, o + c);
+    }
+    hullLv[L] = {
+      E: Int32Array.from(e), T: Int32Array.from(tr),
+      edges: makeTubes(e.length / 2, colorOf(L)), glass: makeGlass(tr.length / 3, colorOf(L)),
+      end: k === 'gpoly' || (k === 'orb' && L === blk.b),
+      faceK: k === 'orb' ? clamp(1.1 - 0.009 * S.size[blk.b], 0.55, 0.9) : 0.9,
+      interlock: k === 'orb' && L > 1 && L < blk.b && !blk.prev[L] && !!famousAt(blk, L),
+    };
+  }
+  for (const blk of S.blocks) {
+    if (!blk.skel) continue;
+    const base = blk.skel.base, b = blk.b, nb = S.size[b] / S.size[base], pairs = [], join = [];
+    for (let H = 0; H < S.count[b]; H++) for (const [s1, s2] of blk.skel.edges) {
+      pairs.push(H * nb + s1, H * nb + s2);
+      let jl = b;
+      for (let L = base + 1; L <= b; L++) { const per = S.size[L] / S.size[base]; if (Math.floor(s1 / per) === Math.floor(s2 / per)) { jl = L; break; } }
+      join.push(jl);
+    }
+    const form = blk.type === 'form';
+    skels.push({ base, b, pairs: Int32Array.from(pairs), join: Float32Array.from(join), mesh: makeSkel(join.length), form, color: new THREE.Color(form ? colorOf(b) : '#c9d2ff'), r: form ? clamp(0.016 * blk.Rf, 0.014, 0.11) : 0 });
+  }
+  bagA = []; bagB = [];
+  for (let m = 1; m <= S.K; m++) if (S.kind[m] === 'bag') {
+    bagMeshes[m] = makeBagLevel(S.count[m], colorOf(m));
+    bagA[m] = new Float32Array(S.count[m] * 3); bagB[m] = new Float32Array(S.count[m] * 3);
+  }
+}
+
+function fitDist(hw, hh, depth) {
+  const vf = THREE.MathUtils.degToRad(camera.fov) / 2, hf = Math.atan(Math.tan(vf) * camera.aspect);
+  return Math.max((hh * 1.5) / Math.tan(vf), (hw * 1.18) / Math.tan(hf)) + depth;
+}
+function layoutAll() {
+  const aspect = clamp(viewW / Math.max(1, viewH), 0.4, 3);
+  for (let L = 0; L <= S.K; L++) {
+    const U = S.unit[L], G = S.count[U], r = L === 0 ? 0.1 : S.unitR[L], bag = L > 0 && S.kind[U] === 'bag';
+    const gap = L === 0 ? 0 : Math.max(0.4 * r, 0.45);
+    const cw = L === 0 ? 0.62 : 2 * r + gap, ch = L === 0 ? 0.62 : (bag ? 2.3 * r : 2 * r) + gap;
+    const cols = clamp(Math.round(Math.sqrt((G * aspect * ch) / cw)), 1, G), rows = Math.ceil(G / cols);
+    const pos = [];
+    for (let h = 0; h < G; h++) {
+      const rr = Math.floor(h / cols), c = h % cols, inRow = rr === rows - 1 ? G - cols * (rows - 1) : cols;
+      pos.push(new V3((c - (inRow - 1) / 2) * cw, ((rows - 1) / 2 - rr) * ch - (bag ? 0.16 * r : 0), 0));
+    }
+    const hw = (cols * cw) / 2, hh = (rows * ch) / 2;
+    S.grids[L] = pos;
+    S.dist[L] = fitDist(hw, hh, L === 0 ? 0.6 : r);
+    S.floorY[L] = -hh - 0.3 * ch - 0.25;
+    S.gstep[L] = Math.max(0.62, 0.5 * ch);
+  }
+}
+
+function setup(value) {
+  const n = clamp(Math.floor(Number(value)) || 1, 1, MAX_N);
+  S.n = n;
+  const primes = factorize(n);
+  let fs, pl;
+  if (S.order === 'sym') { const B = bestOrder(primes); fs = B.fs; pl = B.plan; }
+  else { fs = primes.slice().sort((a, b) => (S.order === 'desc' ? b - a : a - b)); pl = plan(fs); }
+  S.F = [null, ...fs]; S.K = fs.length; S.blocks = pl.blocks;
+  S.size = [1]; S.count = [n];
+  for (let L = 1; L <= S.K; L++) { S.size[L] = S.size[L - 1] * S.F[L]; S.count[L] = n / S.size[L]; }
+  S.kind = [null]; S.blkOf = [null];
+  for (const blk of S.blocks) for (let L = blk.a; L <= blk.b; L++) { S.blkOf[L] = blk; S.kind[L] = blk.type === 'gpoly' ? (L === 1 ? 'poly' : 'gpoly') : blk.type; }
+  S.poly1 = S.K >= 1 ? buildPolygon(S.F[1]) : null;
+  S.poly2 = S.kind[2] === 'gpoly' ? buildPolyhedron(S.F[1], S.F[2], S.poly1) : null;
+  const orb = S.blocks.find((b) => b.type === 'orb');
+  if (orb) buildOrb(orb);
+  // Radio de los puntos en cada capa
+  S.pr = [0.1];
+  if (S.K >= 1) {
+    const e1 = orb ? orb.edge1 : S.poly1.edgeLen, e2 = orb ? EDGE : S.poly2 ? S.poly2.minEdge : e1;
+    S.pr[1] = Math.min(0.1, 0.28 * e1);
+    for (let L = 2; L <= S.K; L++) S.pr[L] = Math.min(S.pr[1], 0.075, 0.22 * e2);
+  }
+  // Tamaño de cada objeto ya montado; las formaciones y las bolsas se construyen con el tamaño de sus hijos
+  S.Robj = [S.pr[0]]; S.bags = [];
+  for (let m = 1; m <= S.K; m++) {
+    const k = S.kind[m], blk = S.blkOf[m];
+    if (k === 'poly') S.Robj[m] = S.poly1.radius + S.pr[1];
+    else if (k === 'gpoly') S.Robj[m] = S.poly2.radius + S.pr[2];
+    else if (k === 'orb') S.Robj[m] = (m === blk.b ? blk.R + 0.12 : blk.gR[m]) + S.pr[m];
+    else if (k === 'form') { if (m === blk.a) buildForm(blk); S.Robj[m] = m === blk.b ? blk.R : blk.gR[m]; }
+    else { S.bags[m] = buildBag(S.F[m], S.Robj[m - 1]); S.Robj[m] = S.bags[m].B; }
+  }
+  // En cada capa, ¿qué se coloca en la cuadrícula? Dentro de un bloque simétrico se muestra ya el sólido final, despiezado.
+  S.unit = [0]; S.prev = [false];
+  for (let L = 1; L <= S.K; L++) {
+    S.unit[L] = L; S.prev[L] = false;
+    for (const blk of S.blocks) {
+      if (blk.type !== 'orb' && blk.type !== 'form') continue;
+      const lo = blk.type === 'orb' ? 1 : blk.a - 1;
+      if (L >= lo && L < blk.b && blk.prev[L]) { S.unit[L] = blk.b; S.prev[L] = true; }
+    }
+  }
+  buildMeshes();
+  S.unitR = [0.1];
+  for (let L = 1; L <= S.K; L++) {
+    const U = S.unit[L];
+    if (S.kind[U] === 'bag') { S.unitR[L] = S.Robj[U]; continue; }
+    descend(U, 0, L, 0, TP[U].set(0, 0, 0), TQ[U].identity(), posA, bagA);
+    let r = 0;
+    for (let i = 0; i < S.size[U]; i++) r = Math.max(r, Math.hypot(posA[i * 3], posA[i * 3 + 1], posA[i * 3 + 2]));
+    r += S.pr[L] + 0.04;
+    for (let m = 1; m < U; m++) if (S.kind[m] === 'bag') for (let h = 0; h < S.size[U] / S.size[m]; h++) r = Math.max(r, Math.hypot(bagA[m][h * 3], bagA[m][h * 3 + 1], bagA[m][h * 3 + 2]) + 1.12 * S.Robj[m]);
+    S.unitR[L] = r;
+  }
+  layoutAll();
+  S.level = S.from = S.to = S.target = 0; S.prog = 1; S.hold = 0; S.playing = true; S.flash = 0;
+  $('#number').value = n;
+  music.factors = fs.slice();
+  music.setLevel(0, 0, false);
+  snapCamera();
+  renderPanel(); updateCopy(); setPlayIcon();
+}
+
+/* ---------- Posiciones: cada punto conserva su identidad en todas las capas ---------- */
+const tA = new V3(), tB = new V3(), pA = new V3(), pB = new V3(), _p = new V3(), tE = new THREE.Euler();
+const carousel = (m, h, t) => (MOTION * t * 0.16) / Math.max(1, m - 2) + h * 0.83;
+const bob = (L, h, t) => MOTION * Math.sin(t * 0.6 + h * 1.7) * 0.05 * (L === 0 ? 0.6 : Math.min(S.unitR[L], 3));
+const rot1 = (g, t) => MOTION * t * 0.22 + g * 0.61;
+function spinQ(m, h, t, out) {
+  const k = S.kind[m];
+  if (k === 'poly') return out.setFromAxisAngle(AX_Z, rot1(h, t));
+  if (k === 'bag') return out.identity();
+  tE.set(0.42, MOTION * t * (k === 'form' ? 0.16 : 0.3) + h * 1.17, 0, 'XYZ');
+  return out.setFromEuler(tE);
+}
+const writeP = (out, i, v) => { out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z; };
+// Coloca el objeto h de la capa m (con centro P y giro Q) tal como se ve en la capa L
+function descend(m, h, L, t, P, Q, out, bagOut) {
+  const k = S.kind[m];
+  if (k === 'poly' || k === 'gpoly') {
+    const verts = k === 'poly' ? S.poly1.verts : S.poly2.verts, sz = verts.length, base = h * sz;
+    for (let j = 0; j < sz; j++) writeP(out, base + j, _p.copy(verts[j]).applyQuaternion(Q).add(P));
+    return;
+  }
+  if (k === 'bag') {
+    if (bagOut && bagOut[m]) { const o = bagOut[m]; o[h * 3] = P.x; o[h * 3 + 1] = P.y; o[h * 3 + 2] = P.z; }
+    const f = S.F[m], offs = S.bags[m].offs, ang = carousel(m, h, t), P2 = TP[m - 1], Q2 = TQ[m - 1];
+    for (let c = 0; c < f; c++) {
+      const child = h * f + c;
+      P2.copy(offs[c]).applyAxisAngle(AX_Y, ang).add(P);
+      descend(m - 1, child, L, t, P2, spinQ(m - 1, child, t, Q2), out, bagOut);
+    }
+    return;
+  }
+  const blk = S.blkOf[m];
+  if (k === 'orb') {
+    const sz = S.size[m], base = h * sz;
+    if (m === blk.b) {
+      const ex = L < m && S.prev[L] ? blk.beta[L] : 0, gs = S.size[Math.max(1, Math.min(L, m))], dirs = blk.dirs[L];
+      for (let j = 0; j < sz; j++) {
+        _p.copy(blk.P[j]);
+        if (ex) _p.addScaledVector(dirs[(j / gs) | 0], ex);
+        writeP(out, base + j, _p.applyQuaternion(Q).add(P));
+      }
+    } else {
+      const c0 = blk.C0[m];
+      for (let j = 0; j < sz; j++) writeP(out, base + j, _p.subVectors(blk.P[j], c0).applyQuaternion(Q).add(P));
+    }
+    return;
+  }
+  // Formación
+  const a = blk.a, nb = S.size[m] / S.size[a - 1], P2 = TP[a - 1], Q2 = TQ[a - 1], whole = m === blk.b;
+  const ex = whole && L < m && S.prev[L] ? blk.beta[L] : 0, gs = ex ? S.size[L] / S.size[a - 1] : 1, dirs = blk.dirs[L], c0 = whole ? null : blk.C0[m];
+  const bagBase = S.kind[a - 1] === 'bag';
+  for (let s = 0; s < nb; s++) {
+    P2.copy(blk.sites[s]);
+    if (ex) P2.addScaledVector(dirs[(s / gs) | 0], ex);
+    if (c0) P2.sub(c0);
+    P2.applyQuaternion(Q).add(P);
+    if (bagBase) Q2.identity(); else Q2.copy(Q).multiply(blk.rot[s]);
+    descend(a - 1, h * nb + s, L, t, P2, Q2, out, bagOut);
+  }
+}
+function displayPositions(L, t, out, bagOut) {
+  if (L === 0) {
+    for (let i = 0; i < S.n; i++) { const p = S.grids[0][i]; out[i * 3] = p.x; out[i * 3 + 1] = p.y; out[i * 3 + 2] = MOTION * Math.sin(t * 0.9 + p.x * 0.55 + p.y * 0.35) * 0.18; }
+    for (let m = 1; m <= S.K; m++) if (bagOut[m]) bagOut[m].fill(0);
+    return;
+  }
+  const U = S.unit[L];
+  for (let h = 0; h < S.count[U]; h++) {
+    const P = TP[U].copy(S.grids[L][h]);
+    P.y += bob(L, h, t);
+    descend(U, h, L, t, P, spinQ(U, h, t, TQ[U]), out, bagOut);
+  }
+  for (let m = U + 1; m <= S.K; m++) {
+    if (!bagOut[m]) continue;
+    const per = S.size[m] / S.size[U], o = bagOut[m];
+    for (let h = 0; h < S.count[m]; h++) {
+      let x = 0, y = 0, z = 0;
+      for (let u = h * per; u < (h + 1) * per; u++) { const g = S.grids[L][u]; x += g.x; y += g.y; z += g.z; }
+      o[h * 3] = x / per; o[h * 3 + 1] = y / per; o[h * 3 + 2] = z / per;
+    }
+  }
+}
+function computePoints(t, e, moving) {
+  displayPositions(moving ? S.from : S.level, t, posA, bagA);
+  if (!moving) { cur.set(posA.subarray(0, S.n * 3)); return; }
+  displayPositions(S.to, t, posB, bagB);
+  const s = Math.sin(Math.PI * e) * MOTION;
+  for (let i = 0; i < S.n; i++) {
+    pA.fromArray(posA, i * 3); tA.fromArray(posB, i * 3);
+    const d = pA.distanceTo(tA);
+    pA.lerp(tA, e);
+    if (s > 0) { pA.z += s * d * 0.32 * (hash(i) * 2 - 1); pA.y += s * d * 0.14 * (hash(i + 99) * 2 - 1); }
+    cur[i * 3] = pA.x; cur[i * 3 + 1] = pA.y; cur[i * 3 + 2] = pA.z;
+  }
+}
+
+const mtx = new THREE.Matrix4(), qtmp = new THREE.Quaternion(), IDQ = new THREE.Quaternion(), sc = new V3(), pos = new V3(), dir = new V3();
+function updatePoints(r) {
+  sc.setScalar(r);
+  for (let i = 0; i < S.n; i++) { pos.fromArray(cur, i * 3); mtx.compose(pos, IDQ, sc); points.setMatrixAt(i, mtx); }
+  points.count = S.n; points.instanceMatrix.needsUpdate = true;
+}
+function setTube(mesh, k, a, b, r) {
+  dir.subVectors(b, a);
+  const len = dir.length();
+  if (len > 1e-6) dir.multiplyScalar(1 / len); else dir.copy(UP);
+  qtmp.setFromUnitVectors(UP, dir);
+  pos.addVectors(a, b).multiplyScalar(0.5);
+  sc.set(r, Math.max(len, 1e-4), r);
+  mtx.compose(pos, qtmp, sc); mesh.setMatrixAt(k, mtx);
+}
+function updateTubes(mesh, edges, r) {
+  if (!mesh.count) return;
+  for (let k = 0; k < edges.length; k += 2) { pA.fromArray(cur, edges[k] * 3); pB.fromArray(cur, edges[k + 1] * 3); setTube(mesh, k >> 1, pA, pB, r); }
+  mesh.instanceMatrix.needsUpdate = true;
+}
+function updateGlass(mesh, tris) {
+  if (!tris.length) return;
+  const P = mesh.geometry.attributes.position.array, N = mesh.geometry.attributes.normal.array;
+  for (let t = 0, o = 0; t < tris.length; t += 3, o += 9) {
+    const a = tris[t] * 3, b = tris[t + 1] * 3, c = tris[t + 2] * 3;
+    P[o] = cur[a]; P[o + 1] = cur[a + 1]; P[o + 2] = cur[a + 2];
+    P[o + 3] = cur[b]; P[o + 4] = cur[b + 1]; P[o + 5] = cur[b + 2];
+    P[o + 6] = cur[c]; P[o + 7] = cur[c + 1]; P[o + 8] = cur[c + 2];
+    const ux = P[o + 3] - P[o], uy = P[o + 4] - P[o + 1], uz = P[o + 5] - P[o + 2];
+    const vx = P[o + 6] - P[o], vy = P[o + 7] - P[o + 1], vz = P[o + 8] - P[o + 2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    N[o] = N[o + 3] = N[o + 6] = nx; N[o + 1] = N[o + 4] = N[o + 7] = ny; N[o + 2] = N[o + 5] = N[o + 8] = nz;
+  }
+  mesh.geometry.attributes.position.needsUpdate = true;
+  mesh.geometry.attributes.normal.needsUpdate = true;
+}
+// Aristas y caras de cada capa: aparecen cuando todos sus vértices están en el mismo grupo
+function updateHulls(lam, tubeR, t) {
+  for (let L = 1; L <= S.K; L++) {
+    const H = hullLv[L];
+    if (!H) continue;
+    const vin = L === 1 ? smooth(0.55, 0.98, lam) : smooth(L - 0.45, L - 0.02, lam), nxt = smooth(L + 0.55, L + 0.98, lam);
+    let ea, fa;
+    if (L === 1) { ea = vin * (0.95 - 0.3 * nxt); fa = 0.4 * vin * (1 - 0.85 * nxt); }
+    else if (H.end) { ea = 0.7 * vin; fa = H.faceK * vin * (1 - 0.25 * nxt); }
+    else if (H.interlock) { ea = 0.7 * vin * (1 - 0.5 * nxt); fa = 0.6 * vin * (1 - 0.8 * nxt); }
+    else { ea = 0.7 * vin * (1 - nxt); fa = 0.6 * vin * (1 - nxt); }
+    H.edges.material.opacity = ea; H.edges.visible = ea > 0.002 && H.edges.count > 0;
+    H.glass.material.uniforms.uAlpha.value = fa; H.glass.visible = fa > 0.002 && H.T.length > 0;
+    H.glass.material.uniforms.uTime.value = t;
+    if (H.edges.visible) updateTubes(H.edges, H.E, tubeR * (L === 1 ? 1 : 1.05));
+    if (H.glass.visible) updateGlass(H.glass, H.T);
+  }
+}
+// Esqueletos platónicos: unen los centros de los polígonos (o de los objetos de una formación)
+const colS = new THREE.Color();
+function updateSkels(lam, tubeR, moving, e) {
+  for (const sk of skels) {
+    // Las aristas entre grupos distintos solo se ven mientras el sólido se muestra entero (aunque esté despiezado)
+    const whole = (L) => (L >= sk.b || S.unit[L] >= sk.b ? 1 : 0);
+    const pv = moving ? whole(S.from) * (1 - e) + whole(S.to) * e : whole(S.level);
+    const fade = sk.form ? 1 : 1 - 0.7 * smooth(sk.b - 0.45, sk.b - 0.02, lam);
+    const appear = smooth(sk.base - 0.45, sk.base - 0.02, lam) * fade, m = sk.mesh;
+    m.visible = appear > 0.002 && m.count > 0;
+    if (!m.visible) continue;
+    const sz = S.size[sk.base];
+    for (let h = 0; h < S.count[sk.base]; h++) {
+      let x = 0, y = 0, z = 0;
+      for (let i = h * sz; i < (h + 1) * sz; i++) { x += cur[i * 3]; y += cur[i * 3 + 1]; z += cur[i * 3 + 2]; }
+      cen[h * 3] = x / sz; cen[h * 3 + 1] = y / sz; cen[h * 3 + 2] = z / sz;
+    }
+    const ghost = sk.form ? 0.16 : 0.1, active = sk.form ? 0.95 : 0.42, rad = sk.form ? Math.max(tubeR, sk.r) : tubeR * 0.55;
+    for (let k = 0; k < sk.join.length; k++) {
+      pA.fromArray(cen, sk.pairs[2 * k] * 3); pB.fromArray(cen, sk.pairs[2 * k + 1] * 3);
+      setTube(m, k, pA, pB, rad);
+      const j = smooth(sk.join[k] - 0.45, sk.join[k] - 0.02, lam), w = appear * (ghost * pv * (1 - j) + active * j);
+      m.setColorAt(k, colS.copy(sk.color).multiplyScalar(w));
+    }
+    m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true;
+  }
+}
+function updateBags(t, e, moving, lam) {
+  for (let m = 1; m <= S.K; m++) {
+    const lvl = bagMeshes[m];
+    if (!lvl) continue;
+    const v = smooth(m - 0.62, m - 0.02, lam);
+    lvl.sack.material.uniforms.uAlpha.value = v;
+    lvl.sack.material.uniforms.uTime.value = t;
+    lvl.tie.material.opacity = v * 0.95;
+    lvl.sack.visible = lvl.tie.visible = v > 0.002;
+    if (v <= 0.002) continue;
+    sc.setScalar(S.Robj[m] * (1 + 0.55 * (1 - v)));
+    for (let h = 0; h < S.count[m]; h++) {
+      pA.fromArray(bagA[m], h * 3);
+      if (moving) { pB.fromArray(bagB[m], h * 3); pA.lerp(pB, e); }
+      tE.set(0, 0, MOTION * Math.sin(t * 0.7 + h * 1.3) * 0.035); qtmp.setFromEuler(tE);
+      mtx.compose(pA, qtmp, sc); lvl.sack.setMatrixAt(h, mtx); lvl.tie.setMatrixAt(h, mtx);
+    }
+    lvl.sack.instanceMatrix.needsUpdate = true; lvl.tie.instanceMatrix.needsUpdate = true;
+  }
+}
+
+/* ---------- Cámara ---------- */
+let userZoomUntil = 0;
+function snapCamera() {
+  const d = S.dist[0];
+  camera.position.set(0, Math.sin(0.3) * d, Math.cos(0.3) * d);
+  controls.target.set(0, 0, 0); controls.update();
+}
+canvas.addEventListener('wheel', () => { userZoomUntil = performance.now() + 6000; }, { passive: true });
+canvas.addEventListener('touchstart', (ev) => { if (ev.touches.length > 1) userZoomUntil = performance.now() + 6000; }, { passive: true });
+
+function resize() {
+  const r = stage.getBoundingClientRect();
+  viewW = Math.max(1, r.width); viewH = Math.max(1, r.height);
+  renderer.setSize(viewW, viewH, false);
+  composer.setSize(viewW, viewH);
+  camera.aspect = viewW / viewH;
+  camera.setViewOffset(viewW, viewH, 0, -Math.round(viewH * 0.07), viewW, viewH);
+  camera.updateProjectionMatrix();
+  if (S.grids.length) layoutAll();
+}
+new ResizeObserver(resize).observe(stage);
+
+/* ---------- Ritmo de la animación ---------- */
+const TRANS = 2.6, HOLD0 = 1.4, HOLD = 3.4;
+const isBlockEnd = (L) => (S.kind[L] === 'orb' || S.kind[L] === 'form') && S.blkOf[L].b === L;
+function depart() {
+  const next = S.level + Math.sign(S.target - S.level);
+  if (next === S.level) return;
+  S.from = S.level; S.to = next; S.prog = 0; S.hold = 0;
+  if (next > S.level) music.riser(TRANS / S.speed); else music.fall();
+}
+function arrive() {
+  const forward = S.to > S.from;
+  S.level = S.from = S.to; S.prog = 1; S.hold = 0;
+  const final = S.level === S.K && S.K >= 1;
+  updateCopy(); renderState();
+  music.setLevel(S.level, S.level >= 1 ? S.F[S.level] : 0, final);
+  if (forward && S.level >= 1) { music.impact(S.F[S.level], final); S.flash = 1; if (isBlockEnd(S.level)) music.shimmer(); }
+  if (S.target !== S.level) depart();
+  else if (final && S.playing) { S.playing = false; setPlayIcon(); }
+}
+function goTo(L) {
+  L = clamp(L, 0, S.K);
+  S.target = L;
+  if (S.prog < 1) {
+    if (Math.sign(L - S.from) !== Math.sign(S.to - S.from) || L === S.from) {
+      const f = S.from; S.from = S.to; S.to = f; S.level = S.from; S.prog = 1 - S.prog;
+    }
+    return;
+  }
+  if (L !== S.level) depart();
+}
+function advance(dt) {
+  if (S.prog < 1) {
+    const rush = S.target !== S.to ? 2.4 : 1;
+    S.prog = Math.min(1, S.prog + (dt * S.speed * rush) / TRANS);
+    if (S.prog >= 1) arrive();
+  } else if (S.playing && S.level < S.K) {
+    S.hold += dt * S.speed;
+    if (S.hold > (S.level === 0 ? HOLD0 : HOLD)) { S.target = S.level + 1; depart(); }
+  }
+}
+
+/* ---------- Textos ---------- */
+// 'golden' o 'tetra' si los grupos de la capa L de un bloque son rectángulos áureos o tetraedros regulares
+function famousAt(blk, L) { return blk && blk.D ? blk.D.famous[L - (blk.type === 'orb' ? 0 : blk.a - 1)] || null : null; }
+// Forma de los grupos intermedios de una formación: pareja, triángulo, cuadrado, tetraedro…
+function shapeOf(blk, m) {
+  const k = S.size[m] / S.size[blk.a - 1], P = blk.sites.slice(0, k).map((v) => [v.x, v.y, v.z]);
+  if (k === 2) return ['pareja', 'parejas'];
+  if (k === 3) return ['triángulo', 'triángulos'];
+  const planar = isPlanarA(P);
+  if (k === 4) {
+    const f = famous4(P);
+    if (f === 'tetra') return ['tetraedro', 'tetraedros'];
+    if (f === 'golden') return ['rectángulo áureo', 'rectángulos áureos'];
+    if (planar) {
+      const d = [d3(P[0], P[1]), d3(P[0], P[2]), d3(P[0], P[3])].sort((x, y) => x - y);
+      return Math.abs(d[0] - d[1]) < 1e-4 * d[1] ? ['cuadrado', 'cuadrados'] : ['rectángulo', 'rectángulos'];
+    }
+  }
+  if (planar && k === 5) return ['pentágono', 'pentágonos'];
+  if (planar && k === 6) return ['hexágono', 'hexágonos'];
+  if (planar && k === 10) return ['decágono', 'decágonos'];
+  return ['grupo', 'grupos'];
+}
+function nameOf(m, pl) {
+  if (m <= 0) return pl ? 'puntos' : 'punto';
+  const k = S.kind[m], blk = S.blkOf[m];
+  if (k === 'poly') return polyName(S.F[1], pl);
+  if (k === 'gpoly') return solidName(S.F[1], S.F[2], pl);
+  if (k === 'bag') return pl ? 'bolsas' : 'bolsa';
+  if (m === blk.b) {
+    const s = SOLID[blk.site];
+    if (k === 'form') return `${pl ? s.many : s.one} de ${nameOf(blk.a - 1, true)}`;
+    if (blk.site === 'tico') return pl ? 'balones' : 'balón';
+    return pl ? s.many : s.one;
+  }
+  if (k === 'orb' && m === 1) return polyName(S.F[1], pl);
+  if (k === 'form') { const sh = shapeOf(blk, m); return `${sh[pl ? 1 : 0]} de ${nameOf(blk.a - 1, true)}`; }
+  const f = famousAt(blk, m);
+  if (f === 'golden') return pl ? 'rectángulos áureos' : 'rectángulo áureo';
+  if (f === 'tetra') return pl ? 'tetraedros' : 'tetraedro';
+  return k === 'form' ? (pl ? 'grupos' : 'grupo') : (pl ? 'piezas' : 'pieza');
+}
+function orbitLine(blk) {
+  const s = SOLID[blk.site], N = GORDER[s.G], M = blk.D.M;
+  if (s.stab > 1) return `El ${s.one} tiene ${N} giros y cada vértice queda fijo con ${s.stab} de ellos: ${N} = ${M} × ${s.stab}.`;
+  const p = S.F[blk.a], where = p === 2 ? `un segmento por cada arista del ${s.grp}` : `un ${polyName(p)} en cada vértice de un ${SITE_NAME[blk.siteSolid] || s.grp}`;
+  return `${cap(s.one)}: ${where}. Ningún giro deja quieto un vértice, así que hay uno por cada giro del ${s.grp}: ${N} = ${M / p} × ${p}.`;
+}
+function copyFor(L) {
+  const n = S.n, F = S.F, K = S.K;
+  if (K === 0) return { eyebrow: 'LA UNIDAD', title: 'El 1 es la unidad', sub: 'No tiene factores primos. Es un único punto, el origen de todos los demás números.', count: '1 = 1' };
+  if (L === 0) return { eyebrow: `MATERIA PRIMA · ${n} UNIDADES`, title: 'El número antes de la forma', sub: 'Cada punto es una unidad. Ninguno desaparecerá en las capas siguientes.', count: `${n} puntos` };
+  const p = F[L], G = S.count[L], size = S.size[L], final = L === K, k = S.kind[L], blk = S.blkOf[L];
+  const eyebrow = `CAPA ${L} · FACTOR ${p}${final ? ' · COMPLETO' : ''}`, count = `${G} × ${size} = ${n}`;
+  if (L === 1) {
+    if (K === 1) return { eyebrow, title: `${n} es primo`, sub: `Sus ${n} puntos solo pueden formar un ${polyName(p)}. No hay más capas.`, count: `${n} = ${n}` };
+    let hint = '';
+    if (k === 'orb' && blk.siteSolid) hint = ` Cada ${polyName(p)} apunta a un vértice de un ${SITE_NAME[blk.siteSolid]}.`;
+    else if (S.kind[2] === 'form') hint = ` Van a los vértices de un ${SOLID[S.blkOf[2].site].one}.`;
+    if (p === 2) return { eyebrow, title: 'Cada unidad encuentra su pareja', sub: `Los ${n} puntos se unen de 2 en 2 y forman ${G} segmentos.${hint}`, count };
+    return { eyebrow, title: `${p} puntos, un ${polyName(p)}`, sub: `Los ${n} puntos se agrupan de ${p} en ${p} y forman ${G} ${polyName(p, G !== 1)}.${hint}`, count };
+  }
+  if (k === 'gpoly') {
+    const p1 = F[1], one = solidName(p1, p), many = solidName(p1, p, true), generic = one.includes('vértices');
+    const short = generic ? 'poliedro' : one, tail = generic ? '' : ` de ${size} vértices`;
+    return { eyebrow, title: `Los ${polyName(p1, true)} ganan volumen`, sub: G === 1 ? `${p} ${polyName(p1, true)} se ensamblan en un único ${one}${tail}.` : `Cada ${short} ensambla ${p} ${polyName(p1, true)}. Hay ${G} ${many}${tail}.`, count };
+  }
+  if (k === 'orb' || k === 'form') {
+    const s = SOLID[blk.site], child = nameOf(L - 1, true), f = famousAt(blk, L);
+    if (L < blk.b) {
+      const who = k === 'form' ? `Cada grupo de 4 ${nameOf(blk.a - 1, true)}` : `Cada pareja de ${child}`;
+      if (f === 'golden') return { eyebrow, title: 'Rectángulos áureos', sub: `${who} forma un rectángulo áureo: sus lados están en razón φ ≈ 1,618. Hay ${G}.`, count };
+      if (f === 'tetra') return { eyebrow, title: 'Tetraedros escondidos', sub: `${who} forma un tetraedro regular. Hay ${G}.`, count };
+      if (k === 'form') return { eyebrow, title: `${cap(child)}, de ${p} en ${p}`, sub: `Cada grupo ocupa ${size / S.size[blk.a - 1]} vértices de un ${s.one}. Hay ${G} ${nameOf(L, G !== 1)}.`, count };
+      const parts = blk.D.M / size, frac = { 2: 'la mitad', 3: 'un tercio', 4: 'un cuarto', 5: 'un quinto', 6: 'un sexto', 10: 'un décimo', 12: 'un doceavo', 15: 'un quinceavo', 20: 'un veinteavo', 30: 'un treintavo' }[parts];
+      const whole = blk.site === 'tico' ? 'balón' : s.one;
+      return { eyebrow, title: parts === 2 ? `Medio ${whole}` : `${cap(child)}, de ${p} en ${p}`, sub: `Cada pieza reúne ${p} ${child}${frac ? `: es ${frac} del ${whole}` : ''}. Hay ${G} piezas de ${size} puntos.`, count };
+    }
+    if (k === 'form') {
+      const base = nameOf(blk.a - 1, true), M = blk.D.M;
+      return { eyebrow, title: G === 1 ? `Un ${s.one} de ${base}` : `${G} ${s.many} de ${base}`, sub: `Los ${M} ${base} ocupan los vértices de un ${s.one}. ${orbitLine(blk)}`, count };
+    }
+    const fam = Object.values(blk.D.famous);
+    const one = G === 1;
+    const extra = fam.includes('golden') ? (one ? ' Lo sostienen tres rectángulos áureos.' : ' A cada uno lo sostienen tres rectángulos áureos.')
+      : fam.includes('tetra') ? (blk.site === 'cube' ? (one ? ' Son dos tetraedros entrelazados: la estrella de Kepler.' : ' Cada uno esconde dos tetraedros entrelazados: la estrella de Kepler.') : (one ? ' Son cinco tetraedros entrelazados.' : ' Cada uno esconde cinco tetraedros entrelazados.')) : '';
+    const title = blk.site === 'tico' ? (G === 1 ? '¡Un balón de fútbol!' : `${G} balones de fútbol`) : G === 1 ? `¡Un ${s.one}!` : `${G} ${s.many}`;
+    return { eyebrow, title, sub: orbitLine(blk) + extra, count };
+  }
+  const child = nameOf(L - 1, true);
+  return { eyebrow, title: S.kind[L - 1] === 'bag' ? 'Bolsas dentro de bolsas' : `Bolsas de ${p}`, sub: G === 1 ? `Una sola bolsa guarda ${p} ${child} con los ${n} puntos dentro.` : `Cada bolsa guarda ${p} ${child}. Quedan ${G} bolsas.`, count };
+}
+function levelSub(L) {
+  const F = S.F, G = S.count[L], k = S.kind[L], blk = S.blkOf[L];
+  if (L === 1) return F[1] === 2 ? `Segmentos · ${G} de 2 puntos` : `Polígono · ${G} ${polyName(F[1], G !== 1)}`;
+  if (k === 'gpoly') return `Poliedro · ${G} ${solidName(F[1], F[2], G !== 1)}`;
+  if (k === 'orb') return L === blk.b ? `Poliedro · ${G} ${G === 1 ? SOLID[blk.site].one : SOLID[blk.site].many}` : `${cap(nameOf(L, G !== 1))} · ${G} de ${S.size[L]} puntos`;
+  if (k === 'form') return L === blk.b ? `Formación · ${G} ${nameOf(L, G !== 1)}` : `${cap(nameOf(L, G !== 1))} · ${G} de ${S.size[L]} puntos`;
+  return `Bolsa · ${G} ${G === 1 ? 'bolsa' : 'bolsas'} de ${S.size[L]} puntos`;
+}
+function updateCopy() {
+  const c = copyFor(S.level);
+  $('#phase').textContent = c.eyebrow;
+  $('#phase').style.setProperty('--lc', colorOf(S.level));
+  $('#title').textContent = c.title;
+  $('#subtitle').textContent = c.sub;
+  $('#count').textContent = c.count;
+}
+function renderSym() {
+  const rows = [];
+  for (const blk of S.blocks) {
+    if (blk.type !== 'orb' && blk.type !== 'form') continue;
+    const s = SOLID[blk.site], N = GORDER[s.G], M = blk.D.M, fs = S.F.slice(blk.a, blk.b + 1).join(' × ');
+    const levels = `Capas ${blk.a}–${blk.b}`;
+    const txt = blk.type === 'orb'
+      ? (s.stab > 1 ? `${fs} = ${M} vértices de un ${s.one}: ${N} giros = ${M} vértices × ${s.stab} giros que dejan fijo cada uno.` : `${fs} = ${M} vértices de un ${s.one}, uno por cada giro del ${s.grp} (${N}).`)
+      : `${fs} = ${M} ${nameOf(blk.a - 1, true)} en los vértices de un ${s.one}: ${N} = ${M} × ${s.stab}.`;
+    rows.push(`<p style="--c:${colorOf(blk.b)}"><span class="chip">${levels}</span>${txt}</p>`);
+  }
+  if (!rows.length) rows.push(`<p>${S.K === 0 ? 'El 1 no tiene factores primos: no hay nada que girar.' : S.K === 1 ? 'Un solo factor no basta para girar en el espacio.' : 'Estos factores no encajan en los giros de ningún sólido platónico.'}${S.order === 'sym' || S.K <= 1 ? '' : ' Prueba el orden «simetría».'}</p>`);
+  $('#sym').innerHTML = rows.join('');
+}
+function renderPanel() {
+  const n = S.n, F = S.F, K = S.K;
+  $('#powers').textContent = `${n} = ${powersText(F.slice(1))}`;
+  const items = [{ L: 0, name: 'Unidades', sub: `${n} ${n === 1 ? 'punto suelto' : 'puntos sueltos'}`, badge: n }];
+  for (let L = 1; L <= K; L++) items.push({ L, name: `Factor ${F[L]}`, sub: levelSub(L), badge: '×' + F[L] });
+  $('#levels').innerHTML = items.map((it) => `<button type="button" class="level" data-level="${it.L}" style="--c:${colorOf(it.L)}"><i class="dot"></i><span><b>${it.name}</b><small>${it.sub}</small></span><span class="badge">${it.badge}</span></button>`).join('');
+  $('#dots').innerHTML = items.map((it) => `<button type="button" data-level="${it.L}" style="--c:${colorOf(it.L)}" aria-label="Ir a la capa ${it.L}"></button>`).join('');
+  renderSym();
+  renderState();
+}
+function renderState() {
+  const F = S.F, K = S.K;
+  $('#equation').innerHTML = `${S.n} = ` + (K ? F.slice(1).map((p, i) => `<span class="${i + 1 <= S.level ? 'used' : ''}" style="--c:${colorOf(i + 1)}">${p}</span>`).join('<i>×</i>') : '<span class="used" style="--c:#eaf6ff">1</span>');
+  document.querySelectorAll('#levels .level').forEach((el) => { const L = +el.dataset.level; el.classList.toggle('on', L <= S.level); el.classList.toggle('now', L === S.level); });
+  document.querySelectorAll('#dots button').forEach((el) => el.classList.toggle('on', +el.dataset.level <= S.level));
+  updateNowPlaying();
+}
+function updateNowPlaying() {
+  const el = $('#nowPlaying');
+  if (!music.on) { el.textContent = 'Música apagada'; return; }
+  const L = S.level;
+  if (L === 0) { el.textContent = 'Sonando · pad ambiental'; return; }
+  const parts = [`arpegio en grupos de ${S.F[L]}`];
+  if (L >= 2) parts.push('bajo y bombo');
+  if (L >= 3) parts.push('caja y platos');
+  if (L >= 4 || (L === S.K && L >= 2)) parts.push('melodía de factores');
+  el.textContent = 'Sonando · ' + parts.join(' · ');
+}
+function setPlayIcon() { const b = $('#play'); b.textContent = S.playing ? 'Ⅱ' : '▶'; b.setAttribute('aria-label', S.playing ? 'Pausar' : 'Reproducir'); }
+
+/* ---------- Controles ---------- */
+const ORDER_LABEL = { sym: 'Factores: simetría', desc: 'Factores: mayor → menor', asc: 'Factores: menor → mayor' };
+$('#form').addEventListener('submit', (ev) => { ev.preventDefault(); setup($('#number').value); });
+$('#reset').addEventListener('click', () => setup(S.n));
+$('#order').addEventListener('click', () => {
+  S.order = { sym: 'desc', desc: 'asc', asc: 'sym' }[S.order];
+  $('#order').textContent = ORDER_LABEL[S.order];
+  setup(S.n);
+});
+$('#play').addEventListener('click', () => {
+  if (!S.playing && S.level === S.K && S.prog >= 1 && S.K > 0) { setup(S.n); return; }
+  S.playing = !S.playing; setPlayIcon();
+});
+$('#next').addEventListener('click', () => { S.playing = false; setPlayIcon(); goTo((S.prog < 1 ? S.target : S.level) + 1); });
+$('#back').addEventListener('click', () => { S.playing = false; setPlayIcon(); goTo((S.prog < 1 ? S.target : S.level) - 1); });
+const jump = (ev) => { const b = ev.target.closest('[data-level]'); if (!b) return; S.playing = false; setPlayIcon(); goTo(+b.dataset.level); };
+$('#levels').addEventListener('click', jump);
+$('#dots').addEventListener('click', jump);
+$('#speed').addEventListener('input', (ev) => { S.speed = +ev.target.value; });
+$('#volume').addEventListener('input', (ev) => music.setVolume(+ev.target.value));
+$('#music').addEventListener('click', () => {
+  const btn = $('#music');
+  if (music.on) music.stop(); else if (!music.start()) { $('#musicLabel').textContent = 'Sin audio disponible'; return; }
+  btn.setAttribute('aria-pressed', String(music.on));
+  $('#musicLabel').textContent = music.on ? 'Música activada' : 'Activar música';
+  if (music.on) music.setLevel(S.level, S.level >= 1 ? S.F[S.level] : 0, S.level === S.K && S.K >= 1);
+  updateNowPlaying();
+});
+$('#examples').innerHTML = [8, 12, 20, 24, 60, 120, 360, 512, 720, 343, 97].map((v) => `<button type="button" data-n="${v}">${v}</button>`).join('');
+$('#examples').addEventListener('click', (ev) => { const b = ev.target.closest('[data-n]'); if (b) setup(+b.dataset.n); });
+window.addEventListener('keydown', (ev) => {
+  if (ev.target.closest('input, textarea')) return;
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); $('#next').click(); }
+  else if (ev.key === 'ArrowLeft') { ev.preventDefault(); $('#back').click(); }
+  else if (ev.key === ' ' && !ev.target.closest('button')) { ev.preventDefault(); $('#play').click(); }
+});
+
+/* ---------- Bucle ---------- */
+const colA = new THREE.Color(), colB = new THREE.Color(), WHITE = new THREE.Color('#ffffff');
+let lastNow = performance.now(), T = 0, camDist = 10;
+function lerpLevel(arr, lam) { const a = Math.floor(lam), b = Math.min(S.K, a + 1), w = lam - a; return arr[a] * (1 - w) + (arr[b] ?? arr[a]) * w; }
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, Math.max(0, (now - lastNow) / 1000));
+  lastNow = now; T += dt;
+  advance(dt);
+  const moving = S.prog < 1 && S.from !== S.to, e = moving ? easeIO(S.prog) : 1;
+  const lam = moving ? S.from + (S.to - S.from) * e : S.level;
+  const beat = music.beat();
+  S.flash = Math.max(0, S.flash - dt * 1.2);
+
+  computePoints(T, e, moving);
+  const r = lerpLevel(S.pr, lam) * (1 + 0.22 * beat);
+  updatePoints(r);
+  colA.set(colorOf(Math.floor(lam))); colB.set(colorOf(Math.min(S.K, Math.floor(lam) + 1)));
+  pointMat.color.copy(WHITE).lerp(colA.lerp(colB, lam - Math.floor(lam)), 0.6).multiplyScalar(1.05 + 0.6 * beat);
+  const tubeR = Math.max(0.005, r * 0.24);
+  updateHulls(lam, tubeR, T);
+  updateSkels(lam, tubeR, moving, e);
+  updateBags(T, e, moving, lam);
+
+  const want = moving ? THREE.MathUtils.lerp(S.dist[S.from], S.dist[S.to], e) : S.dist[S.level];
+  camDist = camera.position.distanceTo(controls.target);
+  if (now > userZoomUntil) {
+    camDist += (want - camDist) * (1 - Math.exp(-dt * 2.2));
+    camera.position.sub(controls.target).setLength(camDist).add(controls.target);
+  }
+  camera.near = Math.max(0.02, camDist / 400); camera.far = camDist * 60 + 400; camera.updateProjectionMatrix();
+  sky.position.copy(camera.position); sky.scale.setScalar(camera.far * 0.8);
+  stars.position.copy(camera.position); stars.scale.setScalar(camera.far * 0.78); stars.rotation.y = T * 0.004 * MOTION;
+  const fy = moving ? THREE.MathUtils.lerp(S.floorY[S.from], S.floorY[S.to], e) : S.floorY[S.level];
+  const gs = moving ? THREE.MathUtils.lerp(S.gstep[S.from], S.gstep[S.to], e) : S.gstep[S.level];
+  floor.position.y = fy; floor.scale.setScalar(want * 12);
+  floorMat.uniforms.uStep.value = gs; floorMat.uniforms.uTime.value = T * MOTION; floorMat.uniforms.uFade.value = want * 1.1;
+  bloom.strength = 0.5 + 0.25 * smooth(0.15, 0.9, lam) + 0.3 * beat + 0.45 * S.flash;
+
+  controls.update();
+  composer.render();
+}
+
+resize();
+setup(60);
+requestAnimationFrame(frame);
+window.__prisma = { S, setup, goTo, music, Music, STEP, plan, bestOrder, decompose, displayPositions, posA, copyFor, levelSub, dbg: () => ({ bagA, hullLv, skels }) };
+</script>
+
+</body>
+</html>
